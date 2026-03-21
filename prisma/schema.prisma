@@ -1,0 +1,580 @@
+// Prisma schema for Glanzoo E-commerce Platform - Production Grade
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  // SWITCHED FROM SQLITE TO POSTGRESQL
+  // For local dev: postgresql://postgres:password@localhost:5432/glanzoo
+  // For production: Neon.tech (free tier)
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")          // Pooler URL - used by the app at runtime
+  directUrl = env("DATABASE_URL_UNPOOLED") // Direct URL - used only by prisma migrate
+}
+
+// ============================================
+// USER & AUTHENTICATION
+// ============================================
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  password      String?
+  name          String?
+  phone         String?
+  role          String    @default("CUSTOMER") // CUSTOMER, ADMIN, VENDOR
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  orders    Order[]
+  addresses Address[]
+  wishlist  WishlistItem[]
+  reviews   Review[]
+  sessions  Session[]
+  vendor    Vendor?
+  returnRequests ReturnRequest[]
+
+  @@index([email])
+  @@index([role])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Address {
+  id        String  @id @default(cuid())
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName  String
+  phone     String
+  address   String
+  city      String
+  state     String
+  pincode   String
+  isDefault Boolean @default(false)
+
+  @@index([userId])
+}
+
+// ============================================
+// VENDOR MANAGEMENT
+// ============================================
+
+model Vendor {
+  id                String    @id @default(cuid())
+  userId            String    @unique
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Business Information
+  businessName      String
+  businessType      String    // "INDIVIDUAL", "COMPANY", "PARTNERSHIP"
+  description       String?
+  logo              String?
+  banner            String?
+  
+  // Contact & Legal
+  contactEmail      String
+  contactPhone      String
+  businessAddress   String    // JSON: { street, city, state, pincode, country }
+  
+  // Verification & Compliance
+  gstNumber         String?
+  panNumber         String?
+  bankDetails       String?   // JSON (encrypted in production): { accountNumber, ifscCode, bankName, accountName }
+  
+  // Status & Approval
+  status            String    @default("PENDING") // PENDING, APPROVED, SUSPENDED, REJECTED
+  approvalNotes     String?
+  approvedAt        DateTime?
+  approvedBy        String?   // Admin user ID
+  
+  // Commission & Financials
+  commissionRate    Float     @default(10.0) // Percentage
+  
+  // Metadata
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  // Relations
+  products          Product[]
+  sales             VendorSale[]
+  
+  @@index([userId])
+  @@index([status])
+  @@index([businessName])
+}
+
+// ============================================
+// PRODUCTS & CATALOG
+// ============================================
+
+model Product {
+  id               String           @id @default(cuid())
+  slug             String           @unique
+  name             String
+  description      String?
+  shortDescription String?
+  detailedInfo     String?          // Long-form multi-paragraph detailed information
+  price            Float
+  material         String? // "Cotton", "Vatican", "Kalamkari", "Denim"
+  fabricType       String? // "Rayon", "Cotton Blend", "Pure Cotton"
+  specifications   String? // JSON object for flexible specs
+  salePrice        Float?
+  mrp              Float?           // Maximum Retail Price (printed on label)
+  images           String           // JSON array stored as string
+  categoryId       String
+  category         Category         @relation(fields: [categoryId], references: [id])
+  variants         ProductVariant[]
+  freeShipping     Boolean          @default(true)
+  featured         Boolean          @default(false)
+  fabric           String?
+  topLength        String?
+  bottomLength     String?
+  careInstructions String?
+  washCare         String?          // JSON array: ["Hand wash", "Do not bleach"]
+  shippingDays     String           @default("3-10 days")
+  tags             String?          // JSON array for filtering
+  metaTitle        String?
+  metaDesc         String?
+  sku              String?          @unique
+  displaySku       String?          // User-facing SKU like "KC-080202"
+  weight           Float?           // grams, for shipping calculation
+  views            Int              @default(0)
+  sales            Int              @default(0)
+  active           Boolean          @default(true)
+  returnEligible   Boolean          @default(true)
+
+  // -- Universal attributes --------------------------------
+  brand            String?          // Brand / label name
+  gender           String?          // Women | Men | Girls | Boys | Unisex
+  occasion         String?          // Casual | Festive | Party | Wedding | Formal | Gym
+  gstRate          Float?           // 5 or 12 (India GST %)
+  hsnCode          String?          // e.g. "6104" (India HSN)
+  countryOfOrigin  String?          @default("India")
+
+  // -- Clothing-specific ----------------------------------
+  pattern          String?          // Solid | Floral | Ethnic Motifs | Bandhani | Ikat | Geometric
+  fit              String?          // Regular | A-Line | Straight | Flared | Anarkali | Relaxed
+  neckType         String?          // Round | V-Neck | Mandarin | Notch | Halter | Square
+  sleeveType       String?          // Sleeveless | Short | 3/4th | Full | Flared
+  workType         String?          // None | Embroidery | Zari | Gotta Patti | Sequins | Block Print
+  // For sets / sarees
+  bottomType       String?          // Palazzo | Salwar | Sharara | Trouser | Churidar
+  dupatteIncluded  Boolean?         // For 3-piece sets
+  blousePiece      String?          // Included | Not Included | Separate (for sarees)
+
+  // -- Perfume / Fragrance --------------------------------
+  concentration    String?          // EDP | EDT | EDC | Attar | Body Mist
+  volumeMl         Float?           // e.g. 100
+  fragranceFamily  String?          // Floral | Oriental | Woody | Fresh | Citrus
+  topNotes         String?          // e.g. "Bergamot, Lemon"
+  middleNotes      String?          // e.g. "Rose, Jasmine"
+  baseNotes        String?          // e.g. "Sandalwood, Musk"
+
+  // -- Electronics ----------------------------------------
+  connectivity     String?          // Bluetooth 5.3 | Wired | Wi-Fi
+  batteryLife      String?          // e.g. "30 hours"
+  warranty         String?          // e.g. "1 Year"
+  waterResistance  String?          // None | IPX4 | IPX5 | IPX7
+
+  // -- Footwear --------------------------------------------
+  heelHeight       String?          // Flat | Low | Mid | High
+  soleMaterial     String?          // Rubber | EVA | TPR | Leather
+  closureType      String?          // Slip-on | Lace-up | Velcro | Buckle
+
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  
+  // Vendor Ownership (null for admin-created products)
+  vendorId         String?
+  vendor           Vendor?          @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  
+  // Approval Workflow for Vendor Products
+  approvalStatus   String           @default("DRAFT") // DRAFT, PENDING, APPROVED, REJECTED
+  approvedAt       DateTime?
+  approvedBy       String?          // Admin user ID
+  rejectionReason  String?
+
+  wishlist     WishlistItem[]
+  reviews      Review[]
+  Collection   Collection?    @relation(fields: [collectionId], references: [id])
+  collectionId String?
+  SizeChart    SizeChart?     @relation(fields: [sizeChartId], references: [id])
+  sizeChartId  String?
+
+  @@index([categoryId])
+  @@index([collectionId])
+  @@index([sizeChartId])
+  @@index([featured])
+  @@index([active])
+  @@index([slug])
+  @@index([vendorId])
+  @@index([approvalStatus])
+}
+
+model ProductVariant {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  size      String
+  color     String?          // Variant colour (e.g. "Red", "Navy Blue")
+  price     Float?           // Variant-level price override (null = use product price)
+  sku       String  @unique
+  stock     Int     @default(0)
+
+  @@index([productId])
+  @@index([sku])
+}
+
+model Category {
+  id          String     @id @default(cuid())
+  slug        String     @unique
+  name        String
+  description String?
+  icon        String?    // Emoji or icon string
+  image       String?    // Category image URL
+  banner      String?    // Banner image URL
+  active      Boolean    @default(true)   // Admin toggle - false = hidden from storefront
+  sortOrder   Int        @default(0)      // Display ordering
+  
+  // Hierarchy
+  parentId    String?
+  parent      Category?  @relation("SubCategories", fields: [parentId], references: [id], onDelete: SetNull)
+  children    Category[] @relation("SubCategories")
+
+  products    Product[]
+
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([slug])
+  @@index([active])
+  @@index([parentId])
+  @@index([sortOrder])
+}
+
+
+// ============================================
+// COLLECTIONS & SIZE CHARTS
+// ============================================
+
+model Collection {
+  id          String    @id @default(cuid())
+  slug        String    @unique
+  name        String
+  description String?
+  image       String?   // Primary image / thumbnail URL
+  banner      String?   // Banner image URL (wide format for hero)
+  featured    Boolean   @default(false)
+  type        String?   // "Today's Collection", "Trending", "Seasonal", "Material-based"
+  sortOrder   Int       @default(0)
+  active      Boolean   @default(true)
+  products    Product[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([slug])
+  @@index([active])
+  @@index([type])
+}
+
+model SizeChart {
+  id        String    @id @default(cuid())
+  name      String // "Standard Kurti", "Plus Size Coord Set"
+  category  String // "Kurti", "Co-ord Set", etc.
+  chartData String // JSON: { sizes: [...], measurements: [...] }
+  products  Product[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([category])
+}
+
+// ============================================
+// WISHLIST & REVIEWS
+// ============================================
+
+model WishlistItem {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String
+  addedAt   DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@index([userId])
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  productId String
+  userId    String
+  rating    Int // 1-5
+  title     String?
+  comment   String?
+  verified  Boolean  @default(false) // Verified purchase
+  approved  Boolean  @default(true)  // Admin moderation
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([userId])
+  @@index([rating])
+}
+
+// ============================================
+// ORDERS & CHECKOUT
+// ============================================
+
+model Order {
+  id                String      @id @default(cuid())
+  userId            String?
+  user              User?       @relation(fields: [userId], references: [id])
+  items             OrderItem[]
+  returnRequests    ReturnRequest[]
+  subtotal          Float
+  discount          Float       @default(0)
+  couponCode        String?
+  shippingCost      Float       @default(0)
+  tax               Float       @default(0)
+  total             Float
+  status            String      @default("PENDING") // PENDING, CONFIRMED, PROCESSING, SHIPPED, DELIVERED, CANCELLED
+  paymentId         String?
+  razorpayOrderId   String?
+  razorpayPaymentId String?
+  razorpaySignature String?
+  paymentMethod     String      @default("COD") // COD, RAZORPAY, STRIPE
+  paymentStatus     String      @default("PENDING") // PENDING, SUCCESS, FAILED
+  shippingAddress   String // JSON
+  trackingNumber    String?
+  logisticsOrderId  String?   // External shipping provider order ID
+  awbCode           String?   // Airway Bill Code from shipping provider
+  courierName       String?   // Name of courier (e.g. "iThink Logistics")
+  trackingUrl       String?   // Public tracking URL
+  shippingProvider  String?   // ITHINK, SHIPROCKET, etc.
+  notes             String?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  
+  vendorSales       VendorSale[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([paymentStatus])
+  @@index([createdAt])
+}
+
+model OrderItem {
+  id        String @id @default(cuid())
+  orderId   String
+  order     Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  name      String
+  size      String
+  quantity  Int
+  price     Float
+
+  @@index([orderId])
+}
+
+// ============================================
+// VENDOR SALES & COMMISSION
+// ============================================
+
+model VendorSale {
+  id                String    @id @default(cuid())
+  vendorId          String
+  vendor            Vendor    @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  orderId           String
+  order             Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  
+  // Financial breakdown
+  productTotal      Float     // Sum of vendor's products in this order
+  commissionRate    Float     // Rate at time of sale
+  commissionAmount  Float     // Calculated commission
+  vendorPayout      Float     // Amount vendor receives (productTotal - commission)
+  
+  // Payout tracking
+  payoutStatus      String    @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED
+  payoutDate        DateTime?
+  payoutReference   String?   // Transaction/UTR reference
+  payoutNotes       String?   // Admin notes on payout
+  
+  createdAt         DateTime  @default(now())
+  
+  @@index([vendorId])
+  @@index([orderId])
+  @@index([payoutStatus])
+  @@index([createdAt])
+}
+
+// ============================================
+// COUPONS & PROMOTIONS
+// ============================================
+
+model Coupon {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  type        String // PERCENTAGE, FIXED
+  value       Float
+  minOrder    Float?
+  maxDiscount Float?
+  validFrom   DateTime
+  validUntil  DateTime
+  usageLimit  Int?
+  usageCount  Int      @default(0)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@index([code])
+  @@index([active])
+}
+
+// ============================================
+// INQUIRIES / CONTACT
+// ============================================
+
+model Inquiry {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  phone     String?
+  subject   String
+  message   String
+  status    String   @default("NEW") // NEW, READ, REPLIED, CLOSED
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ============================================
+// HERO BANNERS (Admin-Managed)
+// ============================================
+
+model HeroBanner {
+  id               String   @id @default(cuid())
+  order            Int      @default(0)  // Display order (0 = first)
+  active           Boolean  @default(true)
+  
+  // Visual Content
+  image            String   // Image URL or path
+  imagePosition    String   @default("center center") // CSS object-position
+  imageOnly        Boolean  @default(false) // When true: shows clean image with NO text overlay
+  
+  // Text Content
+  badge            String?  // "Trending Now", "New Arrivals"
+  title            String   // "Fusion"
+  titleAccent      String   // "Co-ords" (highlighted text)
+  description      String   // Subtitle/description
+  
+  // CTAs
+  primaryCtaText   String   @default("Shop Now")
+  primaryCtaLink   String   @default("/products")
+  secondaryCtaText String? // Optional second CTA
+  secondaryCtaLink String? // Optional second CTA link
+  
+  // Metadata
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  
+  @@index([active, order])
+}
+
+// ============================================
+// AUTH - PASSWORD RESET
+// ============================================
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  email     String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@index([token])
+}
+
+// ============================================
+// AUTH - EMAIL VERIFICATION
+// ============================================
+
+model EmailVerificationToken {
+  id        String   @id @default(cuid())
+  email     String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@index([token])
+}
+
+// ============================================
+// NEWSLETTER SUBSCRIBERS
+// ============================================
+
+model NewsletterSubscriber {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  active       Boolean  @default(true)
+  subscribedAt DateTime @default(now())
+
+  @@index([email])
+}
+// ============================================
+// RETURNS & REFUNDS
+// ============================================
+
+model ReturnRequest {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reason    String
+  details   String?
+  status    String   @default("PENDING") // PENDING, APPROVED, REJECTED, COMPLETED
+  adminNote String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([userId])
+  @@index([status])
+}
+
+// ============================================
+// ANNOUNCEMENT BAR (Admin-Managed)
+// ============================================
+
+model AnnouncementBar {
+  id        String   @id @default(cuid())
+  text      String   @default("Free shipping on orders above Rs.999!")
+  link      String?
+  linkText  String?
+  bgColor   String   @default("#1a1a1a")
+  textColor String   @default("#d4af37")
+  isVisible Boolean  @default(true)
+  updatedAt DateTime @updatedAt
+
+  @@map("announcement_bars")
+}

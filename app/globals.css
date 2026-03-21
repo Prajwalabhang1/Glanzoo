@@ -1,0 +1,221 @@
+@import "tailwindcss";
+
+@theme {
+  /* Vibrant Primary Colors - Rich Rose/Magenta */
+  --color-rose-light: hsl(330 75% 75%);
+  --color-rose: hsl(320 65% 55%);
+  --color-rose-dark: hsl(320 70% 45%);
+
+  /* Accent Colors - Coral/Sunset */
+  --color-coral-light: hsl(0 85% 75%);
+  --color-coral: hsl(0 80% 65%);
+  --color-coral-dark: hsl(0 75% 55%);
+
+  /* Enhanced Gold - Warm and Saturated */
+  --color-gold-light: hsl(38 95% 65%);
+  --color-gold: hsl(38 100% 50%);
+  --color-gold-dark: hsl(32 95% 45%);
+
+  /* Complementary - Deep Teal */
+  --color-teal-light: hsl(173 60% 60%);
+  --color-teal: hsl(173 65% 45%);
+  --color-teal-dark: hsl(173 70% 35%);
+
+  /* Secondary - Soft Lavender */
+  --color-lavender-light: hsl(258 85% 75%);
+  --color-lavender: hsl(258 75% 65%);
+  --color-lavender-dark: hsl(258 70% 55%);
+
+  /* Base Colors */
+  --color-luxury-black: hsl(0 5% 10%);
+  --color-luxury-charcoal: hsl(0 3% 18%);
+  --color-background: hsl(0 0% 100%);
+  --color-foreground: hsl(0 0% 3.9%);
+
+  /* Typography */
+  --font-heading: 'Playfair Display', serif;
+  --font-body: 'Inter', sans-serif;
+}
+
+/* Custom Utilities */
+@layer utilities {
+  .text-gradient-vibrant {
+    background: linear-gradient(135deg, #D946A6, #F59E0B, #FF6B6B);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    background-size: 200% auto;
+    animation: shine 5s linear infinite;
+  }
+
+  .text-gradient-gold {
+    background: linear-gradient(to right, #F59E0B, #FBBF24, #F59E0B);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    background-size: 200% auto;
+    animation: shine 5s linear infinite;
+  }
+
+  .bg-gradient-vibrant {
+    background: linear-gradient(135deg, #D946A6 0%, #F59E0B 50%, #FF6B6B 100%);
+    background-size: 200% 200%;
+    animation: gradient-shift 8s ease infinite;
+  }
+
+  .glass-panel {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+  }
+
+  .glass-panel-dark {
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .glass-panel-vibrant {
+    background: rgba(217, 70, 166, 0.1);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(217, 70, 166, 0.2);
+  }
+
+  .hover-lift {
+    transition: transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1), box-shadow 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+  }
+
+  .hover-lift:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 20px 40px rgba(217, 70, 166, 0.2);
+  }
+
+  .glow-rose {
+    box-shadow: 0 0 20px rgba(217, 70, 166, 0.4);
+  }
+
+  .glow-coral {
+    box-shadow: 0 0 20px rgba(255, 107, 107, 0.4);
+  }
+
+  .glow-gold {
+    box-shadow: 0 0 20px rgba(245, 158, 11, 0.4);
+  }
+
+  /* Gradient Button Animation */
+  .bg-size-200 {
+    background-size: 200% auto;
+  }
+
+  .bg-pos-100 {
+    background-position: 100% center;
+  }
+
+  /* Hide scrollbar but keep scrollability — used for horizontal pill scroll on mobile */
+  .scrollbar-hide {
+    -ms-overflow-style: none;   /* IE/Edge */
+    scrollbar-width: none;      /* Firefox */
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;              /* Chrome/Safari/Opera */
+  }
+}
+
+/* Base Styles */
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 3.9%;
+    --primary: 320 65% 55%;
+    /* Vibrant Rose */
+    --primary-foreground: 0 0% 98%;
+    --secondary: 258 75% 65%;
+    /* Soft Lavender */
+    --secondary-foreground: 0 0% 9%;
+    --muted: 0 0% 96.1%;
+    --muted-foreground: 0 0% 45.1%;
+    --accent: 0 80% 65%;
+    /* Coral */
+    --accent-foreground: 0 0% 9%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 89.8%;
+    --input: 0 0% 89.8%;
+    --ring: 320 65% 55%;
+    /* Vibrant Rose */
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 0 0% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 320 65% 55%;
+    /* Vibrant Rose */
+    --primary-foreground: 0 0% 9%;
+    --secondary: 258 75% 65%;
+    /* Soft Lavender */
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 14.9%;
+    --muted-foreground: 0 0% 63.9%;
+    --accent: 0 80% 65%;
+    /* Coral */
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 14.9%;
+    --input: 0 0% 14.9%;
+    --ring: 0 0% 83.1%;
+  }
+
+  /* scroll-behavior: smooth removed globally — use Tailwind's scroll-smooth class on individual elements */
+
+  html,
+  body {
+    overflow-x: clip;
+    max-width: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-bold tracking-tight;
+  }
+
+  @keyframes shine {
+    to {
+      background-position: 200% center;
+    }
+  }
+
+  @keyframes gradient-shift {
+
+    0%,
+    100% {
+      background-position: 0% 50%;
+    }
+
+    50% {
+      background-position: 100% 50%;
+    }
+  }
+}

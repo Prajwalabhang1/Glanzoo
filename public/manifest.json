@@ -1,0 +1,30 @@
+{
+    "name": "Glanzoo - Premium Ethnic Wear",
+    "short_name": "Glanzoo",
+    "description": "Discover our curated collection of premium ethnic wear, where tradition meets contemporary elegance.",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#ffffff",
+    "theme_color": "#D4AF37",
+    "orientation": "portrait-primary",
+    "icons": [
+        {
+            "src": "/icons/icon-192x192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "/icons/icon-512x512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
+        }
+    ],
+    "categories": [
+        "shopping",
+        "fashion",
+        "lifestyle"
+    ],
+    "screenshots": []
+}

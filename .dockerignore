@@ -1,0 +1,48 @@
+# Glanzoo .dockerignore
+# Optimized for Multi-Stage build inside Docker
+
+# -- Build Artifacts --
+.next/
+!.next/standalone
+!.next/static
+node_modules/
+dist/
+build/
+coverage/
+*.log
+*.tsbuildinfo
+
+# -- Environment / Secrets --
+.env
+.env.local
+.env*.local
+.env.docker.local
+
+# -- Git --
+.git/
+.gitignore
+.gitattributes
+
+# -- Database dev files --
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# -- IDE / OS --
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# -- Docker config (meta files optionally excluded) --
+# Dockerfile
+# docker-compose*.yml
+# .dockerignore
+
+# -- Docs --
+README.md
+QUICKSTART.md
+*.md
