@@ -6,12 +6,8 @@ generator client {
 }
 
 datasource db {
-  // SWITCHED FROM SQLITE TO POSTGRESQL
-  // For local dev: postgresql://postgres:password@localhost:5432/glanzoo
-  // For production: Neon.tech (free tier)
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")          // Pooler URL - used by the app at runtime
-  directUrl = env("DATABASE_URL_UNPOOLED") // Direct URL - used only by prisma migrate
+  provider  = "mysql"
+  url       = env("DATABASE_URL")
 }
 
 // ============================================
@@ -79,19 +75,19 @@ model Vendor {
   // Business Information
   businessName      String
   businessType      String    // "INDIVIDUAL", "COMPANY", "PARTNERSHIP"
-  description       String?
+  description       String?   @db.Text
   logo              String?
   banner            String?
   
   // Contact & Legal
   contactEmail      String
   contactPhone      String
-  businessAddress   String    // JSON: { street, city, state, pincode, country }
+  businessAddress   String    @db.Text // JSON: { street, city, state, pincode, country }
   
   // Verification & Compliance
   gstNumber         String?
   panNumber         String?
-  bankDetails       String?   // JSON (encrypted in production): { accountNumber, ifscCode, bankName, accountName }
+  bankDetails       String?   @db.Text // JSON (encrypted in production): { accountNumber, ifscCode, bankName, accountName }
   
   // Status & Approval
   status            String    @default("PENDING") // PENDING, APPROVED, SUSPENDED, REJECTED
@@ -123,16 +119,16 @@ model Product {
   id               String           @id @default(cuid())
   slug             String           @unique
   name             String
-  description      String?
-  shortDescription String?
-  detailedInfo     String?          // Long-form multi-paragraph detailed information
+  description      String?          @db.Text
+  shortDescription String?          @db.Text
+  detailedInfo     String?          @db.Text // Long-form multi-paragraph detailed information
   price            Float
   material         String? // "Cotton", "Vatican", "Kalamkari", "Denim"
   fabricType       String? // "Rayon", "Cotton Blend", "Pure Cotton"
-  specifications   String? // JSON object for flexible specs
+  specifications   String?          @db.Text // JSON object for flexible specs
   salePrice        Float?
   mrp              Float?           // Maximum Retail Price (printed on label)
-  images           String           // JSON array stored as string
+  images           String           @db.Text // JSON array stored as string
   categoryId       String
   category         Category         @relation(fields: [categoryId], references: [id])
   variants         ProductVariant[]
@@ -141,10 +137,10 @@ model Product {
   fabric           String?
   topLength        String?
   bottomLength     String?
-  careInstructions String?
-  washCare         String?          // JSON array: ["Hand wash", "Do not bleach"]
+  careInstructions String?          @db.Text
+  washCare         String?          @db.Text // JSON array: ["Hand wash", "Do not bleach"]
   shippingDays     String           @default("3-10 days")
-  tags             String?          // JSON array for filtering
+  tags             String?          @db.Text // JSON array for filtering
   metaTitle        String?
   metaDesc         String?
   sku              String?          @unique
@@ -293,7 +289,7 @@ model SizeChart {
   id        String    @id @default(cuid())
   name      String // "Standard Kurti", "Plus Size Coord Set"
   category  String // "Kurti", "Co-ord Set", etc.
-  chartData String // JSON: { sizes: [...], measurements: [...] }
+  chartData String @db.Text // JSON: { sizes: [...], measurements: [...] }
   products  Product[]
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -323,8 +319,8 @@ model Review {
   productId String
   userId    String
   rating    Int // 1-5
-  title     String?
-  comment   String?
+  title     String?  @db.Text
+  comment   String?  @db.Text
   verified  Boolean  @default(false) // Verified purchase
   approved  Boolean  @default(true)  // Admin moderation
   createdAt DateTime @default(now())
@@ -361,14 +357,14 @@ model Order {
   razorpaySignature String?
   paymentMethod     String      @default("COD") // COD, RAZORPAY, STRIPE
   paymentStatus     String      @default("PENDING") // PENDING, SUCCESS, FAILED
-  shippingAddress   String // JSON
+  shippingAddress   String      @db.Text // JSON
   trackingNumber    String?
   logisticsOrderId  String?   // External shipping provider order ID
   awbCode           String?   // Airway Bill Code from shipping provider
   courierName       String?   // Name of courier (e.g. "iThink Logistics")
   trackingUrl       String?   // Public tracking URL
   shippingProvider  String?   // ITHINK, SHIPROCKET, etc.
-  notes             String?
+  notes             String?     @db.Text
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
   
@@ -414,7 +410,7 @@ model VendorSale {
   payoutStatus      String    @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED
   payoutDate        DateTime?
   payoutReference   String?   // Transaction/UTR reference
-  payoutNotes       String?   // Admin notes on payout
+  payoutNotes       String?   @db.Text   // Admin notes on payout
   
   createdAt         DateTime  @default(now())
   
@@ -456,7 +452,7 @@ model Inquiry {
   email     String
   phone     String?
   subject   String
-  message   String
+  message   String   @db.Text
   status    String   @default("NEW") // NEW, READ, REPLIED, CLOSED
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -550,8 +546,8 @@ model ReturnRequest {
   order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  reason    String
-  details   String?
+  reason    String   @db.Text
+  details   String?  @db.Text
   status    String   @default("PENDING") // PENDING, APPROVED, REJECTED, COMPLETED
   adminNote String?
   createdAt DateTime @default(now())
