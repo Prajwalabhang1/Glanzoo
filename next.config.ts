@@ -83,9 +83,6 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   compress: true,
 
-  // REQUIRED for Docker: produces a self-contained server.js in .next/standalone
-  output: 'standalone',
-
   // Skip lint/type errors during production build
   eslint: {
     ignoreDuringBuilds: true,
