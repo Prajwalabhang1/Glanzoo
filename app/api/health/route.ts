@@ -30,6 +30,7 @@ export async function GET() {
             {
                 status: 'error',
                 db: 'disconnected',
+                errorRaw: error instanceof Error ? error.message : String(error),
                 timestamp,
             },
             {
