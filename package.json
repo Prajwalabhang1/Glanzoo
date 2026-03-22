@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "build:production": "prisma generate && next build",
-    "start": "next start",
+    "start": "node server.js",
     "start:next": "next start",
     "lint": "eslint",
     "db:seed": "tsx prisma/seed.ts",
