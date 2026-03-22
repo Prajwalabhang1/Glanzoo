@@ -9,19 +9,10 @@ const globalForPrisma = global as unknown as {
 }
 
 function createPrismaClient() {
-    // Intercept and fix the DATABASE_URL if Hostinger un-escaped the %40 to @
-    const rawUrl = process.env.DATABASE_URL || '';
-    const safeUrl = rawUrl.replace('Akash@glanzoo123@', 'Akash%40glanzoo123@');
-
     return new PrismaClient({
         log: process.env.NODE_ENV === 'development'
             ? ['query', 'error', 'warn']
-            : ['error'],
-        datasources: {
-            db: {
-                url: safeUrl
-            }
-        }
+            : ['error']
     });
 }
 
