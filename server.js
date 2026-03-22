@@ -1,31 +1,26 @@
 // server.js — Hostinger Managed Node.js entry point
-// This file is required by Hostinger to start the Next.js standalone server.
-// It reads the PORT from the environment (Hostinger assigns it automatically).
+// This Bootloader intercepts the Hostinger startup script and safely runs the Next.js Standalone build.
+// Hostinger strips node_modules after the build, so we MUST use the standalone server.
 
-const { createServer } = require('http');
-const { parse } = require('url');
-const next = require('next');
+const path = require('path');
+const fs = require('fs');
 
-const dev = process.env.NODE_ENV !== 'production';
+const standalonePath = path.join(__dirname, '.next', 'standalone', 'server.js');
+
+if (!fs.existsSync(standalonePath)) {
+    console.error('CRITICAL ERROR: Standalone server missing!');
+    console.error('Please ensure exactly: output: "standalone" is in next.config.ts and npm run build was executed successfully.');
+    process.exit(1);
+}
+
 const hostname = '0.0.0.0';
 const port = parseInt(process.env.PORT || '3000', 10);
 
-const app = next({ dev, hostname, port });
-const handle = app.getRequestHandler();
+console.log(`> Booting Hostinger Standalone Mode on http://${hostname}:${port}`);
 
-app.prepare().then(() => {
-    createServer(async (req, res) => {
-        try {
-            const parsedUrl = parse(req.url, true);
-            await handle(req, res, parsedUrl);
-        } catch (err) {
-            console.error('Error occurred handling', req.url, err);
-            res.statusCode = 500;
-            res.end('Internal Server Error');
-        }
-    }).listen(port, hostname, (err) => {
-        if (err) throw err;
-        console.log(`> Ready on http://${hostname}:${port}`);
-        console.log(`> Environment: ${process.env.NODE_ENV}`);
-    });
-});
+// Set the environment variables correctly for the standalone server before requiring it
+process.env.PORT = port.toString();
+process.env.HOSTNAME = hostname;
+
+// Require and run the bundled Next.js server directly
+require(standalonePath);

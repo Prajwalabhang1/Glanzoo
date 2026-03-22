@@ -80,6 +80,7 @@ const nextConfig: NextConfig = {
   },
 
   // Performance
+  output: 'standalone',
   poweredByHeader: false,
   compress: true,
 
