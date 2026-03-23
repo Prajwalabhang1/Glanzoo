@@ -19,7 +19,6 @@ interface Order {
     }>
     awbCode?: string
 }
-export const dynamic = 'force-dynamic';
 
 export default function AccountPage() {
     const { data: session, status } = useSession()

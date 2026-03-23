@@ -10,7 +10,7 @@ export default auth(async (req) => {
     const pathname = nextUrl.pathname;
 
     // Protected routes that require authentication
-    const protectedRoutes = ['/account', '/checkout'];
+    const protectedRoutes = ['/account', '/checkout', '/wishlist'];
     const adminRoutes = ['/admin'];
     const vendorRoutes = ['/vendor'];
 
@@ -62,7 +62,9 @@ export default auth(async (req) => {
 
 export const config = {
     matcher: [
+        '/account',
         '/account/:path*',
+        '/wishlist',
         '/admin/:path*',
         '/vendor/:path*',
         '/checkout',
