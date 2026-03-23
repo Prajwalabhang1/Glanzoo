@@ -1,6 +1,8 @@
 import NextAuth from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import prisma from "@/lib/prisma";
+import { db } from "@/lib/db";
+import { users, vendors } from "@/lib/schema";
+import { eq } from "drizzle-orm";
 import { verifyPassword } from "@/lib/auth-utils";
 import { loginSchema } from "@/lib/validations";
 import { authConfig } from "./auth.config";
@@ -16,49 +18,43 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             },
             async authorize(credentials) {
                 try {
-                    // Validate input
                     const validatedFields = loginSchema.safeParse(credentials);
-
-                    if (!validatedFields.success) {
-                        return null;
-                    }
+                    if (!validatedFields.success) return null;
 
                     const { email, password } = validatedFields.data;
 
-                    // Find user with vendor relation
-                    const user = await prisma.user.findUnique({
-                        where: { email: email.toLowerCase() },
-                        include: { vendor: true },
-                    });
+                    const [user] = await db
+                        .select()
+                        .from(users)
+                        .where(eq(users.email, email.toLowerCase()))
+                        .limit(1);
 
-                    if (!user || !user.password) {
-                        return null;
-                    }
+                    if (!user || !user.password) return null;
 
-                    // Verify password
                     const isPasswordValid = await verifyPassword(password, user.password);
+                    if (!isPasswordValid) return null;
 
-                    if (!isPasswordValid) {
-                        return null;
-                    }
-
-                    // Block unverified users — frontend should surface this as a message
                     if (!user.emailVerified) {
                         throw new Error("EMAIL_NOT_VERIFIED");
                     }
 
-                    // Return user object (include vendor data for JWT)
+                    const [vendor] = await db
+                        .select({ id: vendors.id, status: vendors.status })
+                        .from(vendors)
+                        .where(eq(vendors.userId, user.id))
+                        .limit(1);
+
                     return {
                         id: user.id,
                         email: user.email,
                         name: user.name,
                         role: user.role,
                         image: user.image,
-                        vendor: user.vendor ? { id: user.vendor.id, status: user.vendor.status } : null,
+                        vendor: vendor ?? null,
                     };
                 } catch (error) {
                     console.error("Auth error:", error);
-                    throw error; // re-throw so NextAuth can surface it
+                    throw error;
                 }
             },
         }),

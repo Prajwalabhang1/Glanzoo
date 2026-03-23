@@ -1,155 +1,69 @@
-import prisma from '@/lib/prisma'
-import { ProductsWithFilters } from './ProductsWithFilters'
-import { parseFilterParams, buildProductQuery } from '@/lib/buildProductQuery'
+import { db } from '@/lib/db';
+import { products, categories, productVariants, reviews, vendors } from '@/lib/schema';
+import { ProductsWithFilters } from './ProductsWithFilters';
+import { parseFilterParams, buildProductConditions } from '@/lib/buildProductQuery';
+import { eq, and, isNotNull, asc, desc, inArray, count } from 'drizzle-orm';
+export const dynamic = 'force-dynamic';
 
-export const dynamic = 'force-dynamic'
+export default async function ProductsPage({ searchParams }: { searchParams: Promise<{ [key: string]: string | string[] | undefined }> }) {
+    const params = await searchParams;
+    const urlParams = new URLSearchParams(Object.entries(params).reduce((acc, [key, value]) => { if (value) acc[key] = Array.isArray(value) ? value.join(',') : value; return acc; }, {} as Record<string, string>));
+    const filters = parseFilterParams(urlParams);
+    const conditions = buildProductConditions(filters);
 
-export default async function ProductsPage({
-    searchParams,
-}: {
-    searchParams: Promise<{ [key: string]: string | string[] | undefined }>
-}) {
-    const params = await searchParams
-    const urlParams = new URLSearchParams(
-        Object.entries(params).reduce((acc, [key, value]) => {
-            if (value) {
-                acc[key] = Array.isArray(value) ? value.join(',') : value
-            }
-            return acc
-        }, {} as Record<string, string>)
-    )
+    const productRows = await db.select().from(products).where(conditions).orderBy(desc(products.createdAt));
+    const productIds = productRows.map(p => p.id);
 
-    // Parse filters from URL
-    const filters = parseFilterParams(urlParams)
+    const [variantRows, reviewRows, categoryRows] = productIds.length > 0 ? await Promise.all([
+        db.select().from(productVariants).where(inArray(productVariants.productId, productIds)),
+        db.select({ productId: reviews.productId, rating: reviews.rating }).from(reviews).where(and(inArray(reviews.productId, productIds), eq(reviews.approved, true))),
+        db.select().from(categories),
+    ]) : [[], [], await db.select().from(categories)];
 
-    // Build query with filters
-    const where = buildProductQuery(filters)
+    const catMap = Object.fromEntries(categoryRows.map(c => [c.id, c]));
+    const variantMap = variantRows.reduce((acc, v) => { if (!acc[v.productId]) acc[v.productId] = []; acc[v.productId].push(v); return acc; }, {} as Record<string, typeof productVariants.$inferSelect[]>);
+    const reviewMap = reviewRows.reduce((acc, r) => { if (!acc[r.productId]) acc[r.productId] = []; acc[r.productId].push(r.rating); return acc; }, {} as Record<string, number[]>);
 
-    // Fetch filtered products
-    const products = await prisma.product.findMany({
-        where,
-        include: {
-            category: {
-                select: {
-                    name: true,
-                    slug: true,
-                },
-            },
-            variants: true,
-            reviews: {
-                where: { approved: true },
-                select: { rating: true },
-            },
-            vendor: {
-                select: { businessName: true },
-            },
-        },
-        orderBy: {
-            createdAt: 'desc',
-        },
-    })
+    const productsWithRating = productRows.map(p => {
+        const ratings = reviewMap[p.id] ?? [];
+        const avg = ratings.length > 0 ? Math.round((ratings.reduce((s, r) => s + r, 0) / ratings.length) * 10) / 10 : 0;
+        return { ...p, images: (() => { try { return JSON.parse(p.images); } catch { return []; } })(), category: catMap[p.categoryId] ?? null, variants: variantMap[p.id] ?? [], rating: { avg, count: ratings.length } };
+    });
 
-    // Compute avg rating per product
-    const productsWithRating = products.map((p) => {
-        const approvedReviews = p.reviews ?? []
-        const count = approvedReviews.length
-        const avg = count > 0
-            ? approvedReviews.reduce((sum, r) => sum + r.rating, 0) / count
-            : 0
-        return {
-            ...p,
-            rating: { avg: Math.round(avg * 10) / 10, count },
-        }
-    })
+    // Filter options
+    const filterProducts = await db.select({ material: products.material, price: products.price }).from(products).where(and(eq(products.active, true), isNotNull(products.material)));
+    const allCategories = await db.select().from(categories).where(eq(categories.active, true)).orderBy(asc(categories.sortOrder), asc(categories.name));
 
-    // Fetch filter options directly from DB
-    const [filterProducts, allCategories] = await Promise.all([
-        prisma.product.findMany({
-            where: { active: true, material: { not: null } },
-            select: { material: true, price: true },
-        }),
-        // Fetch ALL active categories (with and without products)
-        // so the sidebar always shows category options for browsing
-        prisma.category.findMany({
-            where: {
-                active: true,
-            },
-            select: {
-                id: true,
-                name: true,
-                slug: true,
-                parentId: true,
-                parent: { select: { name: true, slug: true } },
-                _count: { select: { products: { where: { active: true } } } },
-            },
-            orderBy: [{ parentId: 'asc' }, { name: 'asc' }],
-        }),
-    ])
+    const materialCounts: Record<string, number> = {};
+    let minPrice = Infinity, maxPrice = 0;
+    for (const p of filterProducts) { if (p.material) materialCounts[p.material] = (materialCounts[p.material] || 0) + 1; if (p.price < minPrice) minPrice = p.price; if (p.price > maxPrice) maxPrice = p.price; }
 
-    const materialCounts: Record<string, number> = {}
-    let minPrice = Infinity
-    let maxPrice = 0
-    filterProducts.forEach((p) => {
-        if (p.material) materialCounts[p.material] = (materialCounts[p.material] || 0) + 1
-        if (p.price < minPrice) minPrice = p.price
-        if (p.price > maxPrice) maxPrice = p.price
-    })
+    const subcategories = allCategories.filter(c => c.parentId !== null && !c.name.startsWith('All '));
+    const rootCategories = allCategories.filter(c => c.parentId === null && !c.name.startsWith('All ') && c.name !== 'All Products');
+    const displayCategories = subcategories.length > 0 ? subcategories : rootCategories;
+    const seenSlugs = new Set<string>();
+    const deduped = displayCategories.filter(c => { if (seenSlugs.has(c.slug)) return false; seenSlugs.add(c.slug); return true; });
 
-    // Build category list:
-    // - Prefer subcategories (parentId not null) grouped under their parent
-    // - If no subcategories exist, fall back to showing all root categories
-    // - Exclude generic "All ..." placeholder entries
-    const subcategories = allCategories.filter(
-        (c) => c.parentId !== null && !c.name.startsWith('All ')
-    )
-    const rootCategories = allCategories.filter(
-        (c) => c.parentId === null && !c.name.startsWith('All ') && c.name !== 'All Products'
-    )
-    // Use subcategories if available, otherwise show root ones
-    const displayCategories = subcategories.length > 0 ? subcategories : rootCategories
-
-    // Deduplicate by slug
-    const seenSlugs = new Set<string>()
-    const deduped = displayCategories.filter((c) => {
-        if (seenSlugs.has(c.slug)) return false
-        seenSlugs.add(c.slug)
-        return true
-    })
+    const categoryProductCounts = await Promise.all(deduped.map(async cat => {
+        const [{ total }] = await db.select({ total: count() }).from(products).where(and(eq(products.active, true), eq(products.categoryId, cat.id)));
+        return { ...cat, count: total };
+    }));
 
     const filterOptions = {
         materials: Object.entries(materialCounts).map(([name, count]) => ({ name, count })),
-        categories: deduped.map((c) => ({
-            id: c.id,
-            name: c.name,
-            slug: c.slug,
-            count: c._count.products,
-            group: c.parent?.name ?? null,
-        })),
-        priceRange: {
-            min: minPrice === Infinity ? 0 : Math.floor(minPrice),
-            max: maxPrice === 0 || maxPrice === minPrice ? (minPrice === Infinity ? 10000 : Math.ceil(minPrice) + 10000) : Math.ceil(maxPrice),
-        },
-    }
+        categories: categoryProductCounts.map(c => ({ id: c.id, name: c.name, slug: c.slug, count: c.count, group: c.parentId ? (catMap[c.parentId]?.name ?? null) : null })),
+        priceRange: { min: minPrice === Infinity ? 0 : Math.floor(minPrice), max: maxPrice === 0 || maxPrice === minPrice ? (minPrice === Infinity ? 10000 : Math.ceil(minPrice) + 10000) : Math.ceil(maxPrice) },
+    };
 
     return (
         <div className="min-h-screen bg-gray-50/50">
-            {/* Header */}
             <div className="bg-white border-b">
                 <div className="container mx-auto px-4 py-8">
-                    <h1 className="text-4xl font-bold font-heading mb-2">
-                        All <span className="text-gradient-vibrant">Products</span>
-                    </h1>
+                    <h1 className="text-4xl font-bold font-heading mb-2">All <span className="text-gradient-vibrant">Products</span></h1>
                     <p className="text-gray-600">Discover our collection of premium ethnic wear</p>
                 </div>
             </div>
-
-            {/* Products with Filters */}
-            <ProductsWithFilters
-                initialProducts={productsWithRating}
-                materials={filterOptions.materials}
-                categories={filterOptions.categories}
-                priceRange={filterOptions.priceRange}
-            />
+            <ProductsWithFilters initialProducts={productsWithRating as any} materials={filterOptions.materials} categories={filterOptions.categories} priceRange={filterOptions.priceRange} />
         </div>
-    )
+    );
 }

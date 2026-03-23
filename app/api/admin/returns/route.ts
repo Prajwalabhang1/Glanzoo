@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
-import prisma from '@/lib/prisma';
+import { db } from '@/lib/db';
+import { returnRequests, orders, users } from '@/lib/schema';
+import { eq, desc } from 'drizzle-orm';
 
 async function checkAdmin() {
     const session = await auth();
@@ -9,32 +11,23 @@ async function checkAdmin() {
 
 export async function GET() {
     if (!await checkAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
     try {
-        const returns = await prisma.returnRequest.findMany({
-            include: {
-                order: true,
-                user: { select: { name: true, email: true } }
-            },
-            orderBy: { createdAt: 'desc' }
-        });
-        return NextResponse.json({ returns });
-    } catch {
-        return NextResponse.json({ error: 'Failed' }, { status: 500 });
-    }
+        const rows = await db.select().from(returnRequests).orderBy(desc(returnRequests.createdAt));
+        const withRelations = await Promise.all(rows.map(async r => {
+            const [order] = r.orderId ? await db.select().from(orders).where(eq(orders.id, r.orderId)).limit(1) : [null];
+            const [user] = r.userId ? await db.select({ name: users.name, email: users.email }).from(users).where(eq(users.id, r.userId)).limit(1) : [null];
+            return { ...r, order: order ?? null, user: user ?? null };
+        }));
+        return NextResponse.json({ returns: withRelations });
+    } catch { return NextResponse.json({ error: 'Failed' }, { status: 500 }); }
 }
 
 export async function PATCH(req: Request) {
     if (!await checkAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
     try {
         const { id, status, adminNote } = await req.json();
-        const returnReq = await prisma.returnRequest.update({
-            where: { id },
-            data: { status, adminNote }
-        });
+        await db.update(returnRequests).set({ status, adminNote }).where(eq(returnRequests.id, id));
+        const [returnReq] = await db.select().from(returnRequests).where(eq(returnRequests.id, id)).limit(1);
         return NextResponse.json({ returnRequest: returnReq });
-    } catch {
-        return NextResponse.json({ error: 'Failed' }, { status: 500 });
-    }
+    } catch { return NextResponse.json({ error: 'Failed' }, { status: 500 }); }
 }

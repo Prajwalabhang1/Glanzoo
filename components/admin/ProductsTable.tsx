@@ -1,22 +1,24 @@
-import prisma from '@/lib/prisma'
-import { ProductsTableClient } from './ProductsTableClient'
+import { db } from '@/lib/db';
+import { products, categories, productVariants } from '@/lib/schema';
+import { desc, inArray } from 'drizzle-orm';
+import { ProductsTableClient } from './ProductsTableClient';
 
 export async function ProductsTable() {
-    const products = await prisma.product.findMany({
-        include: {
-            category: true,
-            variants: true,
-        },
-        orderBy: { createdAt: 'desc' },
-    })
+    const productRows = await db.select().from(products).orderBy(desc(products.createdAt));
+    const productIds = productRows.map(p => p.id);
 
-    // Serializing dates to pass to client component
-    const serializedProducts = products.map(product => ({
-        ...product,
-        createdAt: product.createdAt,
-        updatedAt: product.updatedAt,
-        // Convert decimals to numbers if necessary, but Prisma floats are numbers in JS
-    }))
+    const [variantRows, categoryRows] = productIds.length > 0 ? await Promise.all([
+        db.select().from(productVariants).where(inArray(productVariants.productId, productIds)),
+        db.select().from(categories),
+    ]) : [[], await db.select().from(categories)];
 
-    return <ProductsTableClient products={serializedProducts} />
+    const catMap = Object.fromEntries(categoryRows.map(c => [c.id, c]));
+    const varMap = variantRows.reduce((acc, v) => { if (!acc[v.productId]) acc[v.productId] = []; acc[v.productId].push(v); return acc; }, {} as Record<string, any[]>);
+
+    const serializedProducts = productRows.map(p => ({
+        ...p, createdAt: p.createdAt, updatedAt: p.updatedAt,
+        category: catMap[p.categoryId] ?? null, variants: varMap[p.id] ?? [],
+    }));
+
+    return <ProductsTableClient products={serializedProducts as any} />;
 }

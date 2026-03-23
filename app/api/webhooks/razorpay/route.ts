@@ -1,36 +1,20 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
-import prisma from '@/lib/prisma';
+import { db } from '@/lib/db';
+import { orders, orderItems, productVariants } from '@/lib/schema';
+import { eq, and, ne, sql } from 'drizzle-orm';
 
 export async function POST(request: Request) {
     try {
         const text = await request.text();
         const signature = request.headers.get('x-razorpay-signature');
-
         const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
+        if (!secret) { console.error('RAZORPAY_WEBHOOK_SECRET is not defined'); return NextResponse.json({ error: 'Configuration error' }, { status: 500 }); }
 
-        // Verify webhook secret exists
-        if (!secret) {
-            console.error('RAZORPAY_WEBHOOK_SECRET is not defined');
-            return NextResponse.json({ error: 'Configuration error' }, { status: 500 });
-        }
-
-        // Verify signature using timing-safe comparison
-        const expectedSignature = crypto
-            .createHmac('sha256', secret)
-            .update(text)
-            .digest('hex');
-
-        const isValid = crypto.timingSafeEqual(
-            Buffer.from(expectedSignature, 'hex'),
-            Buffer.from(signature || '', 'hex')
-        );
-
-        if (!isValid) {
-            console.error('Invalid webhook signature');
-            return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
-        }
+        const expectedSignature = crypto.createHmac('sha256', secret).update(text).digest('hex');
+        const isValid = crypto.timingSafeEqual(Buffer.from(expectedSignature, 'hex'), Buffer.from(signature || '', 'hex'));
+        if (!isValid) { console.error('Invalid webhook signature'); return NextResponse.json({ error: 'Invalid signature' }, { status: 400 }); }
 
         const body = JSON.parse(text);
         const event = body.event;
@@ -39,66 +23,23 @@ export async function POST(request: Request) {
         if (event === 'payment.captured') {
             const payment = payload.payment.entity;
             const orderId = payment.notes?.orderId;
-
             if (orderId) {
-                // Idempotent: only update if not already confirmed
-                await prisma.order.updateMany({
-                    where: {
-                        id: orderId,
-                        paymentStatus: { not: 'SUCCESS' }, // prevent double-processing
-                    },
-                    data: {
-                        paymentStatus: 'SUCCESS',
-                        status: 'CONFIRMED',
-                        paymentId: payment.id,
-                    },
-                });
+                await db.update(orders).set({ paymentStatus: 'SUCCESS', status: 'CONFIRMED', paymentId: payment.id })
+                    .where(and(eq(orders.id, orderId), ne(orders.paymentStatus, 'SUCCESS')));
             }
         } else if (event === 'payment.failed') {
             const payment = payload.payment.entity;
             const orderId = payment.notes?.orderId;
-
             if (orderId) {
-                // FIX-3 + FIX-18: Use a single atomic transaction to cancel order and
-                // restore stock using updateMany with increment — no race condition possible.
-                await prisma.$transaction(async (tx) => {
-                    // 1. Fetch and cancel order atomically (idempotent guard)
-                    const order = await tx.order.findFirst({
-                        where: {
-                            id: orderId,
-                            paymentStatus: { not: 'FAILED' }, // prevent double-processing
-                        },
-                        include: { items: true },
-                    });
-
-                    if (!order) {
-                        // Already processed — return early (no-op)
-                        return;
+                const [order] = await db.select().from(orders).where(and(eq(orders.id, orderId), ne(orders.paymentStatus, 'FAILED'))).limit(1);
+                if (order) {
+                    await db.update(orders).set({ paymentStatus: 'FAILED', status: 'CANCELLED' }).where(eq(orders.id, orderId));
+                    const items = await db.select().from(orderItems).where(eq(orderItems.orderId, orderId));
+                    for (const item of items) {
+                        await db.update(productVariants).set({ stock: sql`${productVariants.stock} + ${item.quantity}` })
+                            .where(and(eq(productVariants.productId, item.productId), eq(productVariants.size, item.size ?? '')));
                     }
-
-                    // 2. Mark order as cancelled
-                    await tx.order.update({
-                        where: { id: order.id },
-                        data: {
-                            paymentStatus: 'FAILED',
-                            status: 'CANCELLED',
-                        },
-                    });
-
-                    // 3. FIX: Atomically restore stock for all items using increment.
-                    // This is safe even if called multiple times due to the idempotency guard above.
-                    for (const item of order.items) {
-                        await tx.productVariant.updateMany({
-                            where: {
-                                productId: item.productId,
-                                size: item.size,
-                            },
-                            data: {
-                                stock: { increment: item.quantity },
-                            },
-                        });
-                    }
-                });
+                }
             }
         }
 

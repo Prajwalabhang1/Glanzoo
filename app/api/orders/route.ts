@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import { db } from '@/lib/db';
+import { orders, orderItems, productVariants, products } from '@/lib/schema';
+import { eq, and, desc } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { sendOrderConfirmationEmail } from '@/lib/emails/order-confirmation';
 import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit';
-import { Prisma } from '@prisma/client';
 
 export const dynamic = 'force-dynamic';
+
+function cuid() { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
     try {
@@ -14,32 +17,29 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         const status = searchParams.get('status');
         const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 100);
 
-        const where: Prisma.OrderWhereInput = {};
-        if (session?.user?.id && session.user.role !== 'ADMIN') {
-            where.userId = session.user.id;
-        }
-        if (status) {
-            where.status = status;
+        let orderRows;
+        if (session?.user?.role === 'ADMIN') {
+            orderRows = await db.select().from(orders)
+                .where(status ? eq(orders.status, status) : undefined)
+                .orderBy(desc(orders.createdAt)).limit(limit);
+        } else if (session?.user?.id) {
+            orderRows = await db.select().from(orders)
+                .where(and(eq(orders.userId, session.user.id), status ? eq(orders.status, status) : undefined))
+                .orderBy(desc(orders.createdAt)).limit(limit);
+        } else {
+            return NextResponse.json({ orders: [] });
         }
 
-        const orders = await prisma.order.findMany({
-            where,
-            include: {
-                items: true,
-                user: {
-                    select: { id: true, name: true, email: true },
-                },
-            },
-            orderBy: { createdAt: 'desc' },
-            take: limit,
-        });
+        const orderIds = orderRows.map(o => o.id);
+        const items = orderIds.length > 0 ? await db.select().from(orderItems).where(eq(orderItems.orderId, orderRows[0].id)) : [];
 
-        const ordersWithParsedData = orders.map((order) => ({
+        const ordersWithData = orderRows.map(order => ({
             ...order,
             shippingAddress: typeof order.shippingAddress === 'string' ? JSON.parse(order.shippingAddress) : order.shippingAddress,
+            items: items.filter(i => i.orderId === order.id),
         }));
 
-        return NextResponse.json({ orders: ordersWithParsedData });
+        return NextResponse.json({ orders: ordersWithData });
     } catch (error) {
         console.error('Error fetching orders:', error);
         return NextResponse.json({ error: 'Failed to fetch orders' }, { status: 500 });
@@ -51,98 +51,64 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         const ip = getClientIp(request);
         const rl = checkRateLimit(`orders:${ip}`, RATE_LIMITS.ORDERS);
         if (!rl.success) {
-            return NextResponse.json(
-                { error: 'Too many order attempts.' },
-                {
-                    status: 429,
-                    headers: { 'Retry-After': Math.ceil((rl.resetAt - Date.now()) / 1000).toString() },
-                }
-            );
+            return NextResponse.json({ error: 'Too many order attempts.' }, {
+                status: 429,
+                headers: { 'Retry-After': Math.ceil((rl.resetAt - Date.now()) / 1000).toString() },
+            });
         }
 
         const body = await request.json();
         let session = null;
-        try {
-            session = await auth();
-        } catch {
-            console.warn('Auth check failed, proceeding as guest');
-        }
+        try { session = await auth(); } catch { console.warn('Auth check failed, proceeding as guest'); }
 
-        const {
-            customerEmail, customerName, customerPhone, shippingAddress, items, total, subtotal, paymentMethod = 'COD', couponCode, shippingCost = 0, tax = 0, discount = 0
-        } = body;
-
+        const { customerEmail, customerName, customerPhone, shippingAddress, items, total, subtotal, paymentMethod = 'COD', couponCode, shippingCost = 0, tax = 0, discount = 0 } = body;
         if (!customerEmail || !customerName || !customerPhone || !shippingAddress || !items || !total || !subtotal) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
 
-        const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-            const validatedItems = [];
-            for (const item of items) {
-                const variant = await tx.productVariant.findFirst({
-                    where: { productId: item.productId, size: item.size },
-                    include: { product: { select: { name: true, price: true, salePrice: true } } },
-                });
-                if (!variant || variant.stock < item.quantity) {
-                    throw new Error(`Insufficient stock for ${item.name}`);
-                }
-                await tx.productVariant.update({
-                    where: { id: variant.id },
-                    data: { stock: variant.stock - item.quantity },
-                });
-                validatedItems.push({
-                    productId: item.productId, name: variant.product.name, size: item.size, quantity: item.quantity, price: variant.product.salePrice ?? variant.product.price,
-                });
-            }
-
-            const serverSubtotal = validatedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
-
-            // Calculate tax (GST 18%) if not provided
-            const calculatedTax = tax || Math.round(serverSubtotal * 0.18);
-            const serverTotal = serverSubtotal - discount + shippingCost + calculatedTax;
-
-            const order = await tx.order.create({
-                data: {
-                    userId: session?.user?.id || null,
-                    subtotal: serverSubtotal,
-                    discount: discount,
-                    shippingCost: shippingCost,
-                    tax: calculatedTax,
-                    total: serverTotal,
-                    couponCode: couponCode || null,
-                    status: 'PENDING',
-                    paymentMethod,
-                    paymentStatus: 'PENDING',
-                    shippingAddress: JSON.stringify(shippingAddress),
-                    items: {
-                        create: validatedItems.map((item) => ({ ...item })),
-                    },
-                },
-                include: { items: true },
-            });
-
-            if (paymentMethod === 'ONLINE') {
-                const { razorpayService } = await import('@/lib/razorpay');
-                const razorpayOrder = await razorpayService.createOrder({
-                    amount: Math.round(serverTotal * 100), currency: 'INR', receipt: order.id,
-                });
-                await tx.order.update({ where: { id: order.id }, data: { razorpayOrderId: razorpayOrder.id } });
-                return { ...order, razorpay: { id: razorpayOrder.id, amount: razorpayOrder.amount, keyId: razorpayService.getKeyId() } };
-            }
-
-            return { ...order, razorpay: null };
-        });
-
-        try {
-            await sendOrderConfirmationEmail({
-                orderId: result.id, customerName, customerEmail, items: result.items, subtotal: result.subtotal, shippingCost, discount, total: result.total, paymentMethod,
-            });
-        } catch (emailError) {
-            console.error('Failed to send order confirmation email:', emailError);
-            // Continue processing even if email fails
+        // Validate stock and get variant details
+        const validatedItems = [];
+        for (const item of items) {
+            const [variant] = await db.select().from(productVariants)
+                .where(and(eq(productVariants.productId, item.productId), eq(productVariants.size, item.size)))
+                .limit(1);
+            if (!variant || variant.stock < item.quantity) throw new Error(`Insufficient stock for ${item.name}`);
+            const [product] = await db.select({ name: products.name, price: products.price, salePrice: products.salePrice })
+                .from(products).where(eq(products.id, item.productId)).limit(1);
+            await db.update(productVariants).set({ stock: variant.stock - item.quantity }).where(eq(productVariants.id, variant.id));
+            validatedItems.push({ productId: item.productId, name: product.name, size: item.size, quantity: item.quantity, price: product.salePrice ?? product.price });
         }
 
-        return NextResponse.json({ success: true, orderId: result.id, ...result.razorpay }, { status: 201 });
+        const serverSubtotal = validatedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+        const calculatedTax = tax || Math.round(serverSubtotal * 0.18);
+        const serverTotal = serverSubtotal - discount + shippingCost + calculatedTax;
+
+        const orderId = cuid();
+        await db.insert(orders).values({
+            id: orderId, userId: session?.user?.id || null, subtotal: serverSubtotal, discount, shippingCost, tax: calculatedTax,
+            total: serverTotal, couponCode: couponCode || null, status: 'PENDING', paymentMethod, paymentStatus: 'PENDING',
+            shippingAddress: JSON.stringify(shippingAddress),
+        });
+
+        if (validatedItems.length > 0) {
+            await db.insert(orderItems).values(validatedItems.map(item => ({ id: cuid(), orderId, ...item })));
+        }
+
+        let razorpayData = null;
+        if (paymentMethod === 'ONLINE') {
+            const { razorpayService } = await import('@/lib/razorpay');
+            const razorpayOrder = await razorpayService.createOrder({ amount: Math.round(serverTotal * 100), currency: 'INR', receipt: orderId });
+            await db.update(orders).set({ razorpayOrderId: razorpayOrder.id }).where(eq(orders.id, orderId));
+            razorpayData = { id: razorpayOrder.id, amount: razorpayOrder.amount, keyId: razorpayService.getKeyId() };
+        }
+
+        try {
+            await sendOrderConfirmationEmail({ orderId, customerName, customerEmail, items: validatedItems, subtotal: serverSubtotal, shippingCost, discount, total: serverTotal, paymentMethod });
+        } catch (emailError) {
+            console.error('Failed to send order confirmation email:', emailError);
+        }
+
+        return NextResponse.json({ success: true, orderId, ...(razorpayData ?? {}) }, { status: 201 });
     } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : 'Order failed';
         return NextResponse.json({ error: errorMessage }, { status: 500 });

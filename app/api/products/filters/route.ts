@@ -1,87 +1,34 @@
-import { NextResponse } from 'next/server'
-import prisma from '@/lib/prisma'
+import { NextResponse } from 'next/server';
+import { db } from '@/lib/db';
+import { products, categories } from '@/lib/schema';
+import { eq, and, isNotNull, count, min, max, asc } from 'drizzle-orm';
+export const dynamic = 'force-dynamic';
 
-export const dynamic = 'force-dynamic'
-
-/**
- * GET /api/products/filters
- * Returns available filter options (materials, categories, price range)
- */
 export async function GET() {
     try {
-        // Get all unique materials (non-null)
-        const products = await prisma.product.findMany({
-            where: {
-                active: true,
-                material: {
-                    not: null,
-                },
-            },
-            select: {
-                material: true,
-                price: true,
-            },
-        })
+        const productRows = await db.select({ material: products.material, price: products.price })
+            .from(products).where(and(eq(products.active, true), isNotNull(products.material)));
 
-        // Extract unique materials and count
-        const materialCounts: Record<string, number> = {}
-        let minPrice = Infinity
-        let maxPrice = 0
+        const materialCounts: Record<string, number> = {};
+        let minPrice = Infinity, maxPrice = 0;
+        for (const p of productRows) {
+            if (p.material) materialCounts[p.material] = (materialCounts[p.material] || 0) + 1;
+            if (p.price < minPrice) minPrice = p.price;
+            if (p.price > maxPrice) maxPrice = p.price;
+        }
+        const materials = Object.entries(materialCounts).map(([name, count]) => ({ name, count }));
 
-        products.forEach((product) => {
-            if (product.material) {
-                materialCounts[product.material] = (materialCounts[product.material] || 0) + 1
-            }
-            if (product.price < minPrice) minPrice = product.price
-            if (product.price > maxPrice) maxPrice = product.price
-        })
+        const categoryRows = await db.select({ id: categories.id, name: categories.name, slug: categories.slug })
+            .from(categories).orderBy(asc(categories.name));
 
-        const materials = Object.entries(materialCounts).map(([name, count]) => ({
-            name,
-            count,
-        }))
+        const categoriesWithCount = await Promise.all(categoryRows.map(async cat => {
+            const [{ total }] = await db.select({ total: count() }).from(products).where(and(eq(products.active, true), eq(products.categoryId, cat.id)));
+            return { id: cat.id, name: cat.name, slug: cat.slug, count: total };
+        }));
 
-        // Get all categories with product counts
-        const categories = await prisma.category.findMany({
-            select: {
-                id: true,
-                name: true,
-                slug: true,
-                _count: {
-                    select: {
-                        products: {
-                            where: {
-                                active: true,
-                            },
-                        },
-                    },
-                },
-            },
-            orderBy: {
-                name: 'asc',
-            },
-        })
-
-        const categoriesWithCount = categories.map((cat) => ({
-            id: cat.id,
-            name: cat.name,
-            slug: cat.slug,
-            count: cat._count.products,
-        }))
-
-        return NextResponse.json({
-            materials,
-            categories: categoriesWithCount,
-            priceRange: {
-                min: minPrice === Infinity ? 0 : Math.floor(minPrice),
-                max: Math.ceil(maxPrice),
-            },
-        })
+        return NextResponse.json({ materials, categories: categoriesWithCount, priceRange: { min: minPrice === Infinity ? 0 : Math.floor(minPrice), max: Math.ceil(maxPrice) } });
     } catch (error) {
-        console.error('Error fetching filter options:', error)
-        return NextResponse.json(
-            { error: 'Failed to fetch filter options' },
-            { status: 500 }
-        )
+        console.error('Error fetching filter options:', error);
+        return NextResponse.json({ error: 'Failed to fetch filter options' }, { status: 500 });
     }
 }

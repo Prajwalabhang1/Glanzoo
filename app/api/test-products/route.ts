@@ -1,22 +1,19 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import { db } from '@/lib/db';
+import { products, categories, productVariants } from '@/lib/schema';
+import { eq, inArray } from 'drizzle-orm';
 
 export async function GET() {
-    const products = await prisma.product.findMany({
-        where: { active: true },
-        include: {
-            category: true,
-            variants: true,
-        },
-    });
-
+    const productRows = await db.select().from(products).where(eq(products.active, true));
+    const productIds = productRows.map(p => p.id);
+    const [variantRows, categoryRows] = await Promise.all([
+        productIds.length > 0 ? db.select().from(productVariants).where(inArray(productVariants.productId, productIds)) : [],
+        db.select().from(categories),
+    ]);
+    const catMap = Object.fromEntries(categoryRows.map(c => [c.id, c.name]));
     return NextResponse.json({
-        count: products.length,
-        products: products.map(p => ({
-            name: p.name,
-            active: p.active,
-            category: p.category.name,
-        })),
+        count: productRows.length,
+        products: productRows.map(p => ({ name: p.name, active: p.active, category: catMap[p.categoryId] ?? 'Unknown' })),
     });
 }

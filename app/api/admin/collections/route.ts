@@ -1,37 +1,35 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
-import prisma from '@/lib/prisma';
+import { db } from '@/lib/db';
+import { collections, products } from '@/lib/schema';
+import { eq, asc, count } from 'drizzle-orm';
+
+function cuid() { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
 
 async function checkAdmin() {
     const session = await auth();
-    if (session?.user?.role !== 'ADMIN') return false;
-    return true;
+    return session?.user?.role === 'ADMIN';
 }
 
 export async function GET() {
     if (!await checkAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     try {
-        const collections = await prisma.collection.findMany({
-            orderBy: { sortOrder: 'asc' },
-            include: { _count: { select: { products: true } } }
-        });
-        return NextResponse.json({ collections });
-    } catch {
-        return NextResponse.json({ error: 'Failed to fetch collections' }, { status: 500 });
-    }
+        const rows = await db.select().from(collections).orderBy(asc(collections.sortOrder));
+        const withCount = await Promise.all(rows.map(async (col) => {
+            const [{ productCount }] = await db.select({ productCount: count() }).from(products).where(eq(products.collectionId, col.id));
+            return { ...col, _count: { products: productCount } };
+        }));
+        return NextResponse.json({ collections: withCount });
+    } catch { return NextResponse.json({ error: 'Failed to fetch collections' }, { status: 500 }); }
 }
 
 export async function POST(req: Request) {
     if (!await checkAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     try {
-        const body = await req.json();
-        const { name, slug, description, image, banner, featured, type, sortOrder, active } = body;
-
-        const collection = await prisma.collection.create({
-            data: { name, slug, description, image, banner, featured, type, sortOrder, active }
-        });
+        const { name, slug, description, image, banner, featured, type, sortOrder, active } = await req.json();
+        const id = cuid();
+        await db.insert(collections).values({ id, name, slug, description, image, banner, featured: featured ?? false, type, sortOrder: sortOrder ?? 0, active: active ?? true });
+        const [collection] = await db.select().from(collections).where(eq(collections.id, id)).limit(1);
         return NextResponse.json({ collection });
-    } catch {
-        return NextResponse.json({ error: 'Failed to create collection' }, { status: 500 });
-    }
+    } catch { return NextResponse.json({ error: 'Failed to create collection' }, { status: 500 }); }
 }

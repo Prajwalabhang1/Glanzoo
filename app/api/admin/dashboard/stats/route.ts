@@ -1,149 +1,85 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
-import prisma from '@/lib/prisma';
+import { db } from '@/lib/db';
+import { orders, products, users, orderItems } from '@/lib/schema';
+import { eq, count, desc, gte, inArray } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 
-// Middleware to check admin access
-async function checkAdminAccess() {
-    const session = await auth();
-
-    if (!session?.user?.id) {
-        return { error: 'Unauthorized', status: 401 };
-    }
-
-    if (session.user.role !== 'ADMIN') {
-        return { error: 'Forbidden: Admin access required', status: 403 };
-    }
-
-    return null;
-}
-
-// GET /api/admin/dashboard/stats - Get dashboard statistics
 export async function GET() {
     try {
-        const accessError = await checkAdminAccess();
-        if (accessError) {
-            return NextResponse.json(
-                { error: accessError.error },
-                { status: accessError.status }
-            );
-        }
+        const session = await auth();
+        if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
 
-        // Get counts and stats
         const [
-            totalOrders,
-            pendingOrders,
-            confirmedOrders,
-            shippedOrders,
-            deliveredOrders,
-            totalProducts,
-            activeProducts,
-            totalCustomers,
+            [{ totalOrders }],
+            [{ pendingOrders }],
+            [{ confirmedOrders }],
+            [{ shippedOrders }],
+            [{ deliveredOrders }],
+            [{ totalProducts }],
+            [{ activeProducts }],
+            [{ totalCustomers }],
             recentOrders,
+            allOrderRevenue,
         ] = await Promise.all([
-            prisma.order.count(),
-            prisma.order.count({ where: { status: 'PENDING' } }),
-            prisma.order.count({ where: { status: 'CONFIRMED' } }),
-            prisma.order.count({ where: { status: 'SHIPPED' } }),
-            prisma.order.count({ where: { status: 'DELIVERED' } }),
-            prisma.product.count(),
-            prisma.product.count({ where: { active: true } }),
-            prisma.user.count({ where: { role: 'CUSTOMER' } }),
-            prisma.order.findMany({
-                take: 10,
-                orderBy: { createdAt: 'desc' },
-                include: {
-                    items: true,
-                    user: {
-                        select: {
-                            name: true,
-                            email: true,
-                        },
-                    },
-                },
-            }),
+            db.select({ totalOrders: count() }).from(orders),
+            db.select({ pendingOrders: count() }).from(orders).where(eq(orders.status, 'PENDING')),
+            db.select({ confirmedOrders: count() }).from(orders).where(eq(orders.status, 'CONFIRMED')),
+            db.select({ shippedOrders: count() }).from(orders).where(eq(orders.status, 'SHIPPED')),
+            db.select({ deliveredOrders: count() }).from(orders).where(eq(orders.status, 'DELIVERED')),
+            db.select({ totalProducts: count() }).from(products),
+            db.select({ activeProducts: count() }).from(products).where(eq(products.active, true)),
+            db.select({ totalCustomers: count() }).from(users).where(eq(users.role, 'CUSTOMER')),
+            db.select().from(orders).orderBy(desc(orders.createdAt)).limit(10),
+            db.select({ total: orders.total, createdAt: orders.createdAt })
+                .from(orders).where(inArray(orders.paymentStatus, ['SUCCESS', 'PENDING'])),
         ]);
 
-        // Calculate revenue
-        const allOrders = await prisma.order.findMany({
-            where: {
-                paymentStatus: { in: ['SUCCESS', 'PENDING'] },
-            },
-            select: {
-                total: true,
-                createdAt: true,
-            },
-        });
-
-        // Calculate total revenue and monthly revenue
-        const totalRevenue = allOrders.reduce((sum, order) => sum + order.total, 0);
-
+        const totalRevenue = allOrderRevenue.reduce((sum, o) => sum + o.total, 0);
         const now = new Date();
         const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        const revenueThisMonth = allOrders
-            .filter(order => order.createdAt >= firstDayOfMonth)
-            .reduce((sum, order) => sum + order.total, 0);
+        const revenueThisMonth = allOrderRevenue
+            .filter(o => new Date(o.createdAt) >= firstDayOfMonth)
+            .reduce((sum, o) => sum + o.total, 0);
 
-        // Calculate 30-day revenue chart data
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(now.getDate() - 30);
-
-        const last30DaysOrders = allOrders.filter(o => o.createdAt >= thirtyDaysAgo);
-
         const dailyRevenueMap: Record<string, number> = {};
-        // Initialize map with 0s for last 30 days
         for (let i = 0; i < 30; i++) {
-            const d = new Date();
-            d.setDate(now.getDate() - i);
+            const d = new Date(); d.setDate(now.getDate() - i);
             dailyRevenueMap[d.toISOString().split('T')[0]] = 0;
         }
-
-        last30DaysOrders.forEach(order => {
-            const dateStr = order.createdAt.toISOString().split('T')[0];
-            if (dailyRevenueMap[dateStr] !== undefined) {
-                dailyRevenueMap[dateStr] += order.total;
-            }
+        allOrderRevenue.filter(o => new Date(o.createdAt) >= thirtyDaysAgo).forEach(o => {
+            const dateStr = new Date(o.createdAt).toISOString().split('T')[0];
+            if (dailyRevenueMap[dateStr] !== undefined) dailyRevenueMap[dateStr] += o.total;
         });
+        const thirtyDayRevenue = Object.entries(dailyRevenueMap).map(([date, amount]) => ({ date, amount })).sort((a, b) => a.date.localeCompare(b.date));
 
-        const thirtyDayRevenue = Object.entries(dailyRevenueMap)
-            .map(([date, amount]) => ({ date, amount }))
-            .sort((a, b) => a.date.localeCompare(b.date));
+        // Fetch items and augment recent orders
+        const recentOrderIds = recentOrders.map(o => o.id);
+        const recentItems = recentOrderIds.length > 0
+            ? await db.select().from(orderItems).where(inArray(orderItems.orderId, recentOrderIds))
+            : [];
 
-        // Parse shipping addresses for recent orders
-        const recentOrdersWithParsedData = recentOrders.map(order => ({
+        const recentWithData = recentOrders.map(order => ({
             ...order,
             shippingAddress: JSON.parse(order.shippingAddress),
+            items: recentItems.filter(i => i.orderId === order.id),
         }));
 
         return NextResponse.json({
             stats: {
-                orders: {
-                    total: totalOrders,
-                    pending: pendingOrders,
-                    confirmed: confirmedOrders,
-                    shipped: shippedOrders,
-                    delivered: deliveredOrders,
-                },
-                products: {
-                    total: totalProducts,
-                    active: activeProducts,
-                },
-                customers: {
-                    total: totalCustomers,
-                },
-                revenue: {
-                    total: totalRevenue,
-                    thisMonth: revenueThisMonth,
-                    thirtyDayChart: thirtyDayRevenue,
-                },
+                orders: { total: totalOrders, pending: pendingOrders, confirmed: confirmedOrders, shipped: shippedOrders, delivered: deliveredOrders },
+                products: { total: totalProducts, active: activeProducts },
+                customers: { total: totalCustomers },
+                revenue: { total: totalRevenue, thisMonth: revenueThisMonth, thirtyDayChart: thirtyDayRevenue },
             },
-            recentOrders: recentOrdersWithParsedData,
+            recentOrders: recentWithData,
         });
     } catch (error) {
         console.error('Error fetching dashboard stats:', error);
-        return NextResponse.json(
-            { error: 'Failed to fetch dashboard statistics' },
-            { status: 500 }
-        );
+        return NextResponse.json({ error: 'Failed to fetch dashboard statistics' }, { status: 500 });
     }
 }

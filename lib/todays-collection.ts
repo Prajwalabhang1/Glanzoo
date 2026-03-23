@@ -1,72 +1,44 @@
-import prisma from '@/lib/prisma'
+import { db } from '@/lib/db';
+import { products, categories, productVariants } from '@/lib/schema';
+import { eq, and, inArray } from 'drizzle-orm';
 
 /**
  * Get Today's Collection - rotates daily based on the day of year
  * Returns 8 products from featured products with daily rotation
  */
 export async function getTodaysCollection() {
-    const today = new Date()
-    const startOfYear = new Date(today.getFullYear(), 0, 0)
-    const diff = today.getTime() - startOfYear.getTime()
-    const dayOfYear = Math.floor(diff / 86400000)
+    const today = new Date();
+    const startOfYear = new Date(today.getFullYear(), 0, 0);
+    const diff = today.getTime() - startOfYear.getTime();
+    const dayOfYear = Math.floor(diff / 86400000);
 
-    // Get all featured products
-    const allFeaturedProducts = await prisma.product.findMany({
-        where: {
-            active: true,
-            featured: true,
-        },
-        select: {
-            id: true,
-            slug: true,
-            name: true,
-            price: true,
-            salePrice: true,
-            images: true,
-            categoryId: true,
-            variants: {
-                select: {
-                    id: true,
-                    size: true,
-                    stock: true,
-                },
-            },
-        },
-    })
+    const allFeaturedProducts = await db.select({
+        id: products.id, slug: products.slug, name: products.name,
+        price: products.price, salePrice: products.salePrice, images: products.images,
+        categoryId: products.categoryId,
+    }).from(products).where(and(eq(products.active, true), eq(products.featured, true)));
 
-    console.log(`[TodaysCollection] Found ${allFeaturedProducts.length} featured products`)
+    console.log(`[TodaysCollection] Found ${allFeaturedProducts.length} featured products`);
+    if (allFeaturedProducts.length === 0) return [];
 
-    if (allFeaturedProducts.length === 0) {
-        return []
-    }
+    const offset = (dayOfYear % Math.max(1, allFeaturedProducts.length - 7)) || 0;
+    const rotatedProducts = allFeaturedProducts.slice(offset, offset + 8);
+    const productIds = rotatedProducts.map(p => p.id);
+    const categoryIds = [...new Set(rotatedProducts.map(p => p.categoryId).filter(Boolean))];
 
-    // Calculate offset to rotate through products daily
-    const offset = (dayOfYear % Math.max(1, allFeaturedProducts.length - 7)) || 0
+    const [variantRows, categoryRows] = await Promise.all([
+        productIds.length > 0 ? db.select({ id: productVariants.id, size: productVariants.size, stock: productVariants.stock, productId: productVariants.productId }).from(productVariants).where(inArray(productVariants.productId, productIds)) : [],
+        categoryIds.length > 0 ? db.select({ id: categories.id, name: categories.name, slug: categories.slug }).from(categories).where(inArray(categories.id, categoryIds)) : [],
+    ]);
 
-    // Get the rotated products
-    const rotatedProducts = allFeaturedProducts.slice(offset, offset + 8)
+    const catMap = Object.fromEntries(categoryRows.map(c => [c.id, c]));
+    const varMap = variantRows.reduce((acc, v) => { if (!acc[v.productId]) acc[v.productId] = []; acc[v.productId].push(v); return acc; }, {} as Record<string, typeof variantRows>);
 
-    // Now fetch category data separately for each product
-    const productsWithRelations = await Promise.all(
-        rotatedProducts.map(async (product) => {
-            const category = product.categoryId
-                ? await prisma.category.findUnique({
-                    where: { id: product.categoryId },
-                    select: { name: true, slug: true },
-                })
-                : null
+    const result = rotatedProducts.map(product => ({
+        ...product, category: catMap[product.categoryId] ?? null,
+        variants: varMap[product.id] ?? [], collection: null, material: null, displaySku: null, tags: null,
+    }));
 
-            return {
-                ...product,
-                category,
-                collection: null,
-                material: null,
-                displaySku: null,
-                tags: null,
-            }
-        })
-    )
-
-    console.log(`[TodaysCollection] Returning ${productsWithRelations.length} products`)
-    return productsWithRelations
+    console.log(`[TodaysCollection] Returning ${result.length} products`);
+    return result;
 }
