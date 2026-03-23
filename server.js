@@ -18,12 +18,14 @@ function logCrash(err) {
 
 process.on('uncaughtException', (err) => {
     logCrash(err);
-    process.exit(1);
+    // CRITICAL FIX: Do NOT exit the process on Hostinger, let Passenger keep it alive!
+    // process.exit(1);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
     logCrash(reason instanceof Error ? reason : new Error(String(reason)));
-    process.exit(1);
+    // CRITICAL FIX: Next.js edge functions and Image components often throw async 404s.
+    // process.exit(1);
 });
 
 console.log('> Starting Crash Logging Server Module');
@@ -56,6 +58,7 @@ try {
         });
     }).catch((err) => {
         logCrash(err);
+        // Only exit if the actual server fails to bind initially.
         process.exit(1);
     });
 
