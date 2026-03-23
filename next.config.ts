@@ -3,6 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   // Image optimization
   images: {
+    unoptimized: true, // Crucial for Hostinger deployments to prevent 500 errors and image loading failures
     remotePatterns: [
       {
         protocol: 'https',
