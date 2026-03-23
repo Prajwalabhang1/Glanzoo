@@ -26,6 +26,7 @@ interface WishlistItem {
         stock: number
     }
 }
+export const dynamic = 'force-dynamic';
 
 export default function WishlistPage() {
     const { data: session, status } = useSession()

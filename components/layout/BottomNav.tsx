@@ -18,16 +18,11 @@ export function BottomNav() {
     const { items } = useCart()
     const cartCount = items.reduce((sum, item) => sum + item.quantity, 0)
 
-    // Don't show on admin/vendor pages or checkout
+    // Only hide on strictly administrative or checkout pages. Force persistence everywhere else.
     if (
         pathname.startsWith('/admin') ||
         pathname.startsWith('/vendor') ||
-        pathname.startsWith('/checkout') ||
-        pathname.startsWith('/login') ||
-        pathname.startsWith('/register') ||
-        pathname.startsWith('/seller-register') ||
-        pathname.startsWith('/forgot-password') ||
-        pathname.startsWith('/reset-password')
+        pathname.startsWith('/checkout')
     ) return null
 
     return (
