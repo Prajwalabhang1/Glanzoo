@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Required for Hostinger Phusion Passenger deployments
+  output: 'standalone',
+  
   // Image optimization
   images: {
     remotePatterns: [
