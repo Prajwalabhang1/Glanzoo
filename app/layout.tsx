@@ -79,7 +79,7 @@ export default function RootLayout({
                             <ConditionalLayout>
                                 {children}
                             </ConditionalLayout>
-                            <Toaster position="top-center" />
+                            <Toaster position="top-center" style={{ zIndex: 999999 }} toastOptions={{ style: { zIndex: 999999 } }} />
                         </CartProvider>
                     </ToastProvider>
                 </SessionProvider>

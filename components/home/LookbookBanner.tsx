@@ -15,7 +15,7 @@ interface LookbookBannerProps {
 }
 
 export function LookbookBanner({
-    imageUrl = 'https://images.unsplash.com/photo-1594938298603-c8148c4b4e30?q=80&w=2000&auto=format&fit=crop',
+    imageUrl = 'https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?q=80&w=2000&auto=format&fit=crop',
     title = 'Spring\u2013Summer',
     subtitle = 'Where tradition meets contemporary grace. Discover our curated lookbook for the season.',
     ctaText = 'Shop the Look',

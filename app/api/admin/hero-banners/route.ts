@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { heroBanners } from '@/lib/schema';
-import { asc, desc } from 'drizzle-orm';
+import { asc, desc, eq } from 'drizzle-orm';
 
 function cuid() { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
 
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
             primaryCtaText: body.primaryCtaText ?? 'Shop Now', primaryCtaLink: body.primaryCtaLink ?? '/products',
             secondaryCtaText: body.secondaryCtaText, secondaryCtaLink: body.secondaryCtaLink,
         });
-        const [banner] = await db.select().from(heroBanners).where((t: typeof heroBanners.$inferSelect | any) => t.id === id).limit(1);
+        const [banner] = await db.select().from(heroBanners).where(eq(heroBanners.id, id)).limit(1);
         return NextResponse.json({ success: true, banner });
     } catch (error) {
         console.error('Error creating hero banner:', error);
