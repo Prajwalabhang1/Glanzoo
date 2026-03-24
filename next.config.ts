@@ -43,6 +43,14 @@ const nextConfig: NextConfig = {
         source: '/:path*',
         headers: [
           {
+            key: 'Vary',
+            value: 'RSC, Next-Router-State-Tree, Next-Router-Prefetch, Accept',
+          },
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=0, must-revalidate',
+          },
+          {
             key: 'X-DNS-Prefetch-Control',
             value: 'on'
           },
