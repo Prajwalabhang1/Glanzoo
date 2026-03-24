@@ -36,7 +36,7 @@ export default function WishlistPage() {
 
     useEffect(() => {
         if (status === 'unauthenticated') {
-            router.push('/login?callbackUrl=/wishlist')
+            router.push('/login?callbackUrl=/saved-items')
         }
     }, [status, router])
 

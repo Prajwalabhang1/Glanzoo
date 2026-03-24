@@ -206,7 +206,7 @@ export function Header() {
                         </Link>
 
                         {/* Wishlist — always visible, guests redirected to login */}
-                        <a href={session ? '/wishlist' : '/login'}>
+                        <a href={session ? '/saved-items' : '/login'}>
                             <Button
                                 variant="ghost"
                                 size="icon"
@@ -241,7 +241,7 @@ export function Header() {
 
                         {/* Account */}
                         {session ? (
-                            <a href="/account">
+                            <a href="/my-account">
                                 <Button
                                     variant="ghost"
                                     size="icon"

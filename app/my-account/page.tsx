@@ -28,7 +28,7 @@ export default function AccountPage() {
 
     useEffect(() => {
         if (status === 'unauthenticated') {
-            router.push('/login?callbackUrl=/account')
+            router.push('/login?callbackUrl=/my-account')
         }
     }, [status, router])
 
