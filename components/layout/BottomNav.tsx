@@ -31,7 +31,7 @@ export function BottomNav() {
                 {navItems.map(({ href, icon: Icon, label, showBadge }) => {
                     const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href)
                     return (
-                        <Link
+                        <a
                             key={href}
                             href={href}
                             className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-all relative ${isActive
@@ -53,7 +53,7 @@ export function BottomNav() {
                             {isActive && (
                                 <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-1 h-1 bg-orange-500 rounded-full" />
                             )}
-                        </Link>
+                        </a>
                     )
                 })}
             </div>
