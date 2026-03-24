@@ -24,6 +24,10 @@ const nextConfig: NextConfig = {
       {
         protocol: 'https',
         hostname: 'images.pexels.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'jtkudquwauxzwcmzlrnl.supabase.co',
       }
     ],
     formats: ['image/avif', 'image/webp'],

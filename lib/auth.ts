@@ -34,9 +34,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     const isPasswordValid = await verifyPassword(password, user.password);
                     if (!isPasswordValid) return null;
 
-                    if (!user.emailVerified) {
-                        throw new Error("EMAIL_NOT_VERIFIED");
-                    }
+                    // Temporarily bypassed so users can log in and purchase even if the email verification link fails on Hostinger.
+                    // if (!user.emailVerified) {
+                    //     throw new Error("EMAIL_NOT_VERIFIED");
+                    // }
 
                     const [vendor] = await db
                         .select({ id: vendors.id, status: vendors.status })

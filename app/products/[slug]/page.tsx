@@ -5,6 +5,8 @@ import { eq, and, ne, asc, inArray } from 'drizzle-orm';
 import { ProductDetailClient } from './ProductDetailClient';
 import { ProductReviews } from '@/components/products/ProductReviews';
 
+export const dynamic = 'force-dynamic';
+
 interface ProductPageProps { params: Promise<{ slug: string }> }
 
 export async function generateMetadata({ params }: ProductPageProps) {

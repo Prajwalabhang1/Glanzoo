@@ -6,9 +6,7 @@ import { ProductCard } from '@/components/products/ProductCard';
 import Link from 'next/link';
 import { ChevronRight, Home } from 'lucide-react';
 import { CategorySortBar } from './CategorySortBar';
-
-export const revalidate = 3600;
-
+export const dynamic = 'force-dynamic';
 interface CategoryPageProps {
     params: Promise<{ slug: string }>;
     searchParams: Promise<{ sort?: string }>;
