@@ -206,7 +206,7 @@ export function Header() {
                         </Link>
 
                         {/* Wishlist — always visible, guests redirected to login */}
-                        <Link href={session ? '/wishlist' : '/login'}>
+                        <a href={session ? '/wishlist' : '/login'}>
                             <Button
                                 variant="ghost"
                                 size="icon"
@@ -220,7 +220,7 @@ export function Header() {
                                     </span>
                                 )}
                             </Button>
-                        </Link>
+                        </a>
 
                         {/* Cart */}
                         <Link href="/cart">
@@ -241,7 +241,7 @@ export function Header() {
 
                         {/* Account */}
                         {session ? (
-                            <Link href="/account">
+                            <a href="/account">
                                 <Button
                                     variant="ghost"
                                     size="icon"
@@ -250,16 +250,16 @@ export function Header() {
                                 >
                                     <User className="h-5 w-5" />
                                 </Button>
-                            </Link>
+                            </a>
                         ) : (
-                            <Link href="/login" className="hidden md:block">
+                            <a href="/login" className="hidden md:block">
                                 <Button
                                     size="sm"
                                     className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-md hover:shadow-lg transition-all text-xs px-4"
                                 >
                                     Sign In
                                 </Button>
-                            </Link>
+                            </a>
                         )}
 
                         {/* Mobile Menu Button */}

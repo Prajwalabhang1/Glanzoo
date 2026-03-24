@@ -289,7 +289,7 @@ export function ProductCard({ product }: ProductCardProps) {
                 <div className="bg-white rounded-2xl overflow-hidden transition-all duration-300 border border-gray-100 hover:border-gold/30 flex flex-col h-full">
                     {/* Image Container */}
                     <div className="relative aspect-[3/4] overflow-hidden bg-gray-100 cursor-pointer flex-shrink-0"
-                        onClick={() => router.push(`/products/${product.slug}`)}
+                        onClick={() => window.location.href = `/products/${product.slug}`}
                     >
                         {/* Primary Image */}
                         <motion.div
@@ -417,7 +417,7 @@ export function ProductCard({ product }: ProductCardProps) {
                         )}
 
                         {/* Category & Title */}
-                        <Link href={`/products/${product.slug}`} className="flex-1">
+                        <a href={`/products/${product.slug}`} className="flex-1">
                             {product.category?.name && (
                                 <p className="text-[10px] text-gray-500 font-medium tracking-wider uppercase mb-0.5">
                                     {product.category.name}
@@ -432,7 +432,7 @@ export function ProductCard({ product }: ProductCardProps) {
                                     {product.shortDescription}
                                 </p>
                             )}
-                        </Link>
+                        </a>
 
                         {/* Category-aware info pills */}
                         {infoPills.length > 0 && (
