@@ -21,8 +21,11 @@ export default auth(async (req) => {
   const pathname = nextUrl.pathname;
 
   // ── API route guards ─────────────────────────────────────────────────────────
-  const isAdminApi = pathname.startsWith('/api/admin');
-  const isVendorApi = pathname.startsWith('/api/vendor');
+  // ── Helper to prevent Hostinger caching of Middleware responses ──
+  const noCacheResponse = (res: NextResponse) => {
+    res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    return res;
+  };
 
   if (isAdminApi) {
     // Allow public navigation bar to fetch categories
@@ -30,30 +33,30 @@ export default auth(async (req) => {
 
     if (!isPublicCategoriesFetch) {
       if (!session) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        return noCacheResponse(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
       }
       if (session.user?.role !== 'ADMIN') {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        return noCacheResponse(NextResponse.json({ error: 'Forbidden' }, { status: 403 }));
       }
     }
   }
 
   if (isVendorApi) {
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return noCacheResponse(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
     }
     if (session.user?.role !== 'VENDOR') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      return noCacheResponse(NextResponse.json({ error: 'Forbidden' }, { status: 403 }));
     }
     if (
       session.user.vendorStatus !== 'APPROVED' &&
       // Allow the pending-status check endpoint itself
       !pathname.includes('/api/vendor/status')
     ) {
-      return NextResponse.json(
+      return noCacheResponse(NextResponse.json(
         { error: 'Vendor account not yet approved' },
         { status: 403 }
-      );
+      ));
     }
   }
 
@@ -70,17 +73,17 @@ export default auth(async (req) => {
   if ((isProtectedRoute || isAdminRoute || isVendorRoute) && !session) {
     const loginUrl = new URL('/login', req.url);
     loginUrl.searchParams.set('callbackUrl', pathname);
-    return NextResponse.redirect(loginUrl);
+    return noCacheResponse(NextResponse.redirect(loginUrl));
   }
 
   // Admin page: non-ADMIN role → home
   if (isAdminRoute && session?.user?.role !== 'ADMIN') {
-    return NextResponse.redirect(new URL('/', req.url));
+    return noCacheResponse(NextResponse.redirect(new URL('/', req.url)));
   }
 
   // Vendor page: non-VENDOR role → home
   if (isVendorRoute && session?.user?.role !== 'VENDOR') {
-    return NextResponse.redirect(new URL('/', req.url));
+    return noCacheResponse(NextResponse.redirect(new URL('/', req.url)));
   }
 
   // Unapproved vendor → pending page
@@ -89,7 +92,7 @@ export default auth(async (req) => {
     session?.user?.vendorStatus !== 'APPROVED' &&
     !pathname.includes('/pending')
   ) {
-    return NextResponse.redirect(new URL('/vendor/pending', req.url));
+    return noCacheResponse(NextResponse.redirect(new URL('/vendor/pending', req.url)));
   }
 
   return NextResponse.next();
