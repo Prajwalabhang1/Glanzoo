@@ -40,6 +40,7 @@ const categoryImages: Record<string, string> = {
 
 const getCategoryImage = (category: Category) => {
     if (category.image) return category.image
+    if (category.icon && (category.icon.startsWith('/') || category.icon.startsWith('http'))) return category.icon
     const bySlug = categoryImages[category.slug.toLowerCase()]
     if (bySlug) return bySlug
     const byName = categoryImages[category.name.toLowerCase().replace(/\s+/g, '-')]
@@ -134,9 +135,9 @@ export function CategorySection({ categories }: CategorySectionProps) {
                                                         loading="lazy"
                                                     />
                                                     <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                                                    {/* Icon overlay — supports both image URLs and emoji */}
+                                                    {/* Icon overlay — emoji stays visible constantly, image overlays on hover */}
                                                     {category.icon && (
-                                                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                                                        <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 ${category.icon.startsWith('/') || category.icon.startsWith('http') ? 'opacity-0 group-hover:opacity-100' : 'opacity-100'}`}>
                                                             {category.icon.startsWith('/') || category.icon.startsWith('http') ? (
                                                                 // eslint-disable-next-line @next/next/no-img-element
                                                                 <img
@@ -145,7 +146,7 @@ export function CategorySection({ categories }: CategorySectionProps) {
                                                                     className="w-full h-full object-cover rounded-full"
                                                                 />
                                                             ) : (
-                                                                <span className="text-3xl drop-shadow-lg">{category.icon}</span>
+                                                                <span className="text-3xl drop-shadow-[0_4px_8px_rgba(0,0,0,0.5)] z-10 bg-white/40 backdrop-blur-[2px] w-full h-full flex items-center justify-center rounded-full border border-white/50">{category.icon}</span>
                                                             )}
                                                         </div>
                                                     )}
