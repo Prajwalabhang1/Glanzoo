@@ -4,6 +4,8 @@ import { auth } from "@/lib/auth";
 import VendorSidebar from "@/components/vendor/VendorSidebar";
 import VendorHeader from "@/components/vendor/VendorHeader";
 
+export const dynamic = 'force-dynamic';
+
 export default async function VendorLayout({ children }: { children: ReactNode }) {
     const session = await auth();
 

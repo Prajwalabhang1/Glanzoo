@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
   title: 'Checkout | Glanzoo',
   description: 'Securely checkout your Glanzoo order. Pay via UPI, cards, or cash on delivery.',
