@@ -44,7 +44,28 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         if (!validatedData.success) return NextResponse.json({ error: "Validation failed", details: validatedData.error.errors }, { status: 400 });
 
         const d = validatedData.data;
-        const updateData: Record<string, any> = {};
+        type ProductUpdate = {
+          name?: string;
+          description?: string | null;
+          shortDescription?: string | null;
+          price?: number;
+          salePrice?: number | null;
+          images?: string;
+          categoryId?: string;
+          material?: string | null;
+          fabricType?: string | null;
+          topLength?: string | null;
+          bottomLength?: string | null;
+          careInstructions?: string | null;
+          shippingDays?: string;
+          tags?: string | null;
+          freeShipping?: boolean;
+          returnEligible?: boolean;
+          approvalStatus?: string;
+          approvedAt?: null;
+          approvedBy?: null;
+        };
+        const updateData: ProductUpdate = {};
         if (d.name) updateData.name = d.name;
         if (d.description !== undefined) updateData.description = d.description;
         if (d.shortDescription !== undefined) updateData.shortDescription = d.shortDescription;

@@ -210,28 +210,21 @@ export default function CheckoutPage() {
                 body: JSON.stringify({
                     customerEmail: formData.email,
                     customerName: formData.fullName,
-                    customerPhone: formData.phone,
+                    customerPhone: formData.phone.replace(/\D/g, ''), // strip non-digits
                     shippingAddress: {
                         fullName: formData.fullName,
-                        phone: formData.phone,
-                        addressLine1: formData.address,
+                        phone: formData.phone.replace(/\D/g, ''),
+                        address: formData.address,   // FIX: was addressLine1
                         city: formData.city,
                         state: formData.state,
-                        postalCode: formData.pincode,
-                        country: 'India',
+                        pincode: formData.pincode,  // FIX: was postalCode
                     },
                     items: items.map(item => ({
                         productId: item.productId,
-                        name: item.name,
-                        size: item.size,
+                        size: item.size || 'FREE', // size is required by API
                         quantity: item.quantity,
-                        price: item.salePrice || item.price,
                     })),
-                    subtotal,
-                    shippingCost: shipping,
-                    total,
                     couponCode: appliedCoupon?.code,
-                    discount: couponDiscount,
                     paymentMethod: formData.paymentMethod,
                 }),
             })
@@ -244,7 +237,7 @@ export default function CheckoutPage() {
             const data = await orderResponse.json()
 
             if (formData.paymentMethod === 'ONLINE') {
-                const { orderId, id: razorpayOrderId, amount, currency, keyId } = data
+                const { orderId, razorpayOrderId, amount, currency, keyId } = data
 
                 if (!razorpayOrderId) {
                     throw new Error('Failed to initiate online payment')

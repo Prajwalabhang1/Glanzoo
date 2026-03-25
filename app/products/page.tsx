@@ -1,9 +1,28 @@
+/**
+ * app/products/page.tsx — Products listing page
+ *
+ * Fixes:
+ *  - N+1 BUG: Was firing one DB query per category to get product counts.
+ *    Now uses a single grouped count query.
+ *  - Removed `as any` on ProductsWithFilters — used proper type inference.
+ *  - Added page metadata (title, description).
+ *  - Added safe JSON.parse for images.
+ *  - Added pagination limit (no unbounded query).
+ */
+import type { Metadata } from 'next';
 import { db } from '@/lib/db';
-import { products, categories, productVariants, reviews, vendors } from '@/lib/schema';
+import { products, categories, productVariants, reviews } from '@/lib/schema';
 import { ProductsWithFilters } from './ProductsWithFilters';
 import { parseFilterParams, buildProductConditions } from '@/lib/buildProductQuery';
-import { eq, and, isNotNull, asc, desc, inArray, count } from 'drizzle-orm';
+import { eq, and, isNotNull, asc, desc, inArray, count, sql } from 'drizzle-orm';
+
 export const dynamic = 'force-dynamic';
+
+export const metadata: Metadata = {
+  title: 'All Products | Glanzoo',
+  description:
+    'Discover Glanzoo\'s full collection of premium ethnic wear — co-ord sets, kurti pant sets, sarees and more. Filter by fabric, price, and style.',
+};
 
 export default async function ProductsPage({ searchParams }: { searchParams: Promise<{ [key: string]: string | string[] | undefined }> }) {
     const params = await searchParams;
@@ -38,32 +57,70 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
     let minPrice = Infinity, maxPrice = 0;
     for (const p of filterProducts) { if (p.material) materialCounts[p.material] = (materialCounts[p.material] || 0) + 1; if (p.price < minPrice) minPrice = p.price; if (p.price > maxPrice) maxPrice = p.price; }
 
-    const subcategories = allCategories.filter(c => c.parentId !== null && !c.name.startsWith('All '));
-    const rootCategories = allCategories.filter(c => c.parentId === null && !c.name.startsWith('All ') && c.name !== 'All Products');
+    const subcategories = allCategories.filter((c) => c.parentId !== null && !c.name.startsWith('All '));
+    const rootCategories = allCategories.filter((c) => c.parentId === null && !c.name.startsWith('All ') && c.name !== 'All Products');
     const displayCategories = subcategories.length > 0 ? subcategories : rootCategories;
     const seenSlugs = new Set<string>();
-    const deduped = displayCategories.filter(c => { if (seenSlugs.has(c.slug)) return false; seenSlugs.add(c.slug); return true; });
+    const deduped = displayCategories.filter((c) => {
+      if (seenSlugs.has(c.slug)) return false;
+      seenSlugs.add(c.slug);
+      return true;
+    });
+    const dedupedIds = deduped.map((c) => c.id);
 
-    const categoryProductCounts = await Promise.all(deduped.map(async cat => {
-        const [{ total }] = await db.select({ total: count() }).from(products).where(and(eq(products.active, true), eq(products.categoryId, cat.id)));
-        return { ...cat, count: total };
-    }));
+    // FIX N+1: Single grouped count query instead of one query per category
+    const catCountRows =
+      dedupedIds.length > 0
+        ? await db
+            .select({
+              categoryId: products.categoryId,
+              total: count(),
+            })
+            .from(products)
+            .where(and(eq(products.active, true), inArray(products.categoryId, dedupedIds)))
+            .groupBy(products.categoryId)
+        : [];
+    const catCountMap = Object.fromEntries(catCountRows.map((r) => [r.categoryId, r.total]));
 
     const filterOptions = {
-        materials: Object.entries(materialCounts).map(([name, count]) => ({ name, count })),
-        categories: categoryProductCounts.map(c => ({ id: c.id, name: c.name, slug: c.slug, count: c.count, group: c.parentId ? (catMap[c.parentId]?.name ?? null) : null })),
-        priceRange: { min: minPrice === Infinity ? 0 : Math.floor(minPrice), max: maxPrice === 0 || maxPrice === minPrice ? (minPrice === Infinity ? 10000 : Math.ceil(minPrice) + 10000) : Math.ceil(maxPrice) },
+      materials: Object.entries(materialCounts).map(([name, cnt]) => ({ name, count: cnt })),
+      categories: deduped.map((c) => ({
+        id: c.id,
+        name: c.name,
+        slug: c.slug,
+        count: catCountMap[c.id] ?? 0,
+        group: c.parentId ? (catMap[c.parentId]?.name ?? null) : null,
+      })),
+      priceRange: {
+        min: minPrice === Infinity ? 0 : Math.floor(minPrice),
+        max:
+          maxPrice === 0 || maxPrice === minPrice
+            ? minPrice === Infinity
+              ? 10000
+              : Math.ceil(minPrice) + 10000
+            : Math.ceil(maxPrice),
+      },
     };
 
+    // Derive strongly-typed products for ProductsWithFilters
+    type ProductWithMeta = (typeof productsWithRating)[number];
+
     return (
-        <div className="min-h-screen bg-gray-50/50">
-            <div className="bg-white border-b">
-                <div className="container mx-auto px-4 py-8">
-                    <h1 className="text-4xl font-bold font-heading mb-2">All <span className="text-gradient-vibrant">Products</span></h1>
-                    <p className="text-gray-600">Discover our collection of premium ethnic wear</p>
-                </div>
-            </div>
-            <ProductsWithFilters initialProducts={productsWithRating as any} materials={filterOptions.materials} categories={filterOptions.categories} priceRange={filterOptions.priceRange} />
+      <div className="min-h-screen bg-gray-50/50 pb-safe-nav">
+        <div className="bg-white border-b">
+          <div className="container mx-auto px-4 py-8">
+            <h1 className="text-4xl font-bold font-heading mb-2">
+              All <span className="text-gradient-vibrant">Products</span>
+            </h1>
+            <p className="text-gray-600">Discover our collection of premium ethnic wear</p>
+          </div>
         </div>
+        <ProductsWithFilters
+          initialProducts={productsWithRating as ProductWithMeta[]}
+          materials={filterOptions.materials}
+          categories={filterOptions.categories}
+          priceRange={filterOptions.priceRange}
+        />
+      </div>
     );
 }

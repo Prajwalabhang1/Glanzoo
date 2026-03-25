@@ -1,3 +1,12 @@
+/**
+ * app/products/[slug]/page.tsx — Product detail page
+ *
+ * Fixes:
+ *  - Removed `as any` on relatedProducts prop (typed via Drizzle inference)
+ *  - Switched from `force-dynamic` to ISR (revalidate=3600) for Hostinger
+ *    performance — product pages don’t need real-time data
+ *  - Product detail page generateMetadata also benefits from ISR caching
+ */
 import { notFound } from 'next/navigation';
 import { db } from '@/lib/db';
 import { products, categories, collections, productVariants, reviews, vendors } from '@/lib/schema';
@@ -5,7 +14,8 @@ import { eq, and, ne, asc, inArray } from 'drizzle-orm';
 import { ProductDetailClient } from './ProductDetailClient';
 import { ProductReviews } from '@/components/products/ProductReviews';
 
-export const dynamic = 'force-dynamic';
+// ISR: rebuild each product page every hour
+export const revalidate = 3600;
 
 interface ProductPageProps { params: Promise<{ slug: string }> }
 
@@ -44,12 +54,24 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
     const jsonLd = { '@context': 'https://schema.org', '@type': 'Product', name: product.name, description: product.description || '', image: productImages, sku: product.sku || product.slug, brand: { '@type': 'Brand', name: 'Glanzoo' }, offers: { '@type': 'Offer', url: `${process.env.NEXT_PUBLIC_APP_URL}/products/${product.slug}`, priceCurrency: 'INR', price: (product.salePrice ? Number(product.salePrice) : Number(product.price)).toFixed(2), availability: inStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock', seller: { '@type': 'Organization', name: 'Glanzoo' } }, ...(reviewCount > 0 && { aggregateRating: { '@type': 'AggregateRating', ratingValue: reviewAvg.toFixed(1), reviewCount } }) };
 
+    const relatedProducts = relatedProductRows.map((p) => {
+        const rv = relatedVariantRows.filter((v) => v.productId === p.id);
+        return {
+            ...p,
+            price: Number(p.price),
+            salePrice: p.salePrice != null ? Number(p.salePrice) : null,
+            variants: rv,
+            rating: { avg: 0, count: 0 },
+        };
+    });
+    type RelatedProduct = (typeof relatedProducts)[number];
+
     return (
         <>
             <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
             <ProductDetailClient
-                product={{ ...product, price: Number(product.price), salePrice: product.salePrice ? Number(product.salePrice) : null, mrp: product.mrp ? Number(product.mrp) : null, gstRate: product.gstRate ? Number(product.gstRate) : null, volumeMl: product.volumeMl ? Number(product.volumeMl) : null, collection: collectionRow ?? null, sizeChart: null, vendorName: vendorRow?.businessName ?? null, variants: variantRows.map(v => ({ id: v.id, size: v.size, stock: v.stock, color: v.color ?? null, price: v.price ? Number(v.price) : null })) }}
-                relatedProducts={relatedProductRows.map(p => { const rv = relatedVariantRows.filter(v => v.productId === p.id); return { ...p, price: Number(p.price), salePrice: p.salePrice ? Number(p.salePrice) : null, variants: rv, rating: { avg: 0, count: 0 } }; }) as any}
+                product={{ ...product, price: Number(product.price), salePrice: product.salePrice ? Number(product.salePrice) : null, mrp: product.mrp ? Number(product.mrp) : null, gstRate: product.gstRate ? Number(product.gstRate) : null, volumeMl: product.volumeMl ? Number(product.volumeMl) : null, category: categoryRow, collection: collectionRow ?? null, sizeChart: null, vendorName: vendorRow?.businessName ?? null, variants: variantRows.map(v => ({ id: v.id, size: v.size, stock: v.stock, color: v.color ?? null, price: v.price ? Number(v.price) : null })) }}
+                relatedProducts={relatedProducts as RelatedProduct[]}
                 rating={{ avg: reviewAvg, count: reviewCount }}
             />
             <div className="container mx-auto px-4 pb-16"><ProductReviews productId={product.id} /></div>

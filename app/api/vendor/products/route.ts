@@ -33,7 +33,11 @@ export async function GET() {
             db.select().from(categories),
         ]) : [[], []];
         const catMap = Object.fromEntries(categoryRows.map(c => [c.id, c]));
-        const varMap = variantRows.reduce((acc, v) => { if (!acc[v.productId]) acc[v.productId] = []; acc[v.productId].push(v); return acc; }, {} as Record<string, any[]>);
+        const varMap = variantRows.reduce((acc, v) => {
+          if (!acc[v.productId]) acc[v.productId] = [];
+          acc[v.productId].push(v);
+          return acc;
+        }, {} as Record<string, typeof productVariants.$inferSelect[]>);
 
         const enriched = productRows.map(p => ({
             ...p, images: (() => { try { return JSON.parse(p.images); } catch { return []; } })(),
@@ -70,7 +74,7 @@ export async function POST(request: Request) {
         });
 
         if (variants && variants.length > 0) {
-            await db.insert(productVariants).values(variants.map((v: any) => ({
+            await db.insert(productVariants).values(variants.map((v: { size: string; stock?: number; sku?: string }) => ({
                 id: cuid(), productId, size: v.size, stock: v.stock || 0,
                 sku: v.sku || `${vendor.id.slice(0, 6)}-${slug.slice(0, 4)}-${v.size}-${Math.random().toString(36).substring(2, 6)}`.toUpperCase(),
             })));

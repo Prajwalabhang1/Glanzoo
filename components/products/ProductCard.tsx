@@ -81,6 +81,8 @@ export function ProductCard({ product }: ProductCardProps) {
     const [isMounted, setIsMounted] = useState(false)
     const [isWishlisted, setIsWishlisted] = useState(false)
     const [isWishlistLoading, setIsWishlistLoading] = useState(false)
+    // Mobile: tap-to-swap image (mirrors hover on desktop)
+    const [isTouched, setIsTouched] = useState(false)
 
     useEffect(() => {
         setIsMounted(true)
@@ -284,6 +286,9 @@ export function ProductCard({ product }: ProductCardProps) {
                 variants={productCardHover}
                 onHoverStart={() => setIsHovered(true)}
                 onHoverEnd={() => setIsHovered(false)}
+                // Mobile: tap anywhere on card shows alternate image (like hover on desktop)
+                onTouchStart={() => setIsTouched(true)}
+                onTouchEnd={() => setTimeout(() => setIsTouched(false), 800)}
                 className="group h-full"
             >
                 <div className="bg-white rounded-2xl overflow-hidden transition-all duration-300 border border-gray-100 hover:border-gold/30 flex flex-col h-full">
@@ -307,9 +312,9 @@ export function ProductCard({ product }: ProductCardProps) {
                             />
                         </motion.div>
 
-                        {/* Secondary Image Crossfade */}
+                        {/* Secondary Image Crossfade — triggers on hover (desktop) or tap (mobile) */}
                         <AnimatePresence>
-                            {isHovered && secondaryImage !== primaryImage && (
+                            {(isHovered || isTouched) && secondaryImage !== primaryImage && (
                                 <motion.div
                                     initial={{ opacity: 0 }}
                                     animate={{ opacity: 1 }}
@@ -361,12 +366,12 @@ export function ProductCard({ product }: ProductCardProps) {
                             )}
                         </div>
 
-                        {/* Wishlist Button */}
+                        {/* Wishlist Button — 40×40px for comfortable touch target */}
                         <motion.button
                             whileTap={buttonTap}
                             onClick={handleWishlist}
                             disabled={isWishlistLoading}
-                            className="absolute top-2 right-2 w-8 h-8 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center opacity-100 transition-opacity hover:bg-white shadow-md z-10 disabled:opacity-60"
+                            className="absolute top-2 right-2 w-10 h-10 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center transition-opacity hover:bg-white shadow-md z-10 disabled:opacity-60 touch-manipulation"
                         >
                             <Heart
                                 className={`h-4 w-4 transition-colors ${isWishlisted
@@ -393,17 +398,18 @@ export function ProductCard({ product }: ProductCardProps) {
                             </div>
                         )}
 
-                        {/* Quick View Button */}
+                        {/* Quick View — icon-only on mobile ≤375px, text+icon on sm+ */}
                         <motion.button
                             initial={{ opacity: 0, y: 10 }}
                             animate={isHovered ? { opacity: 1, y: 0 } : { opacity: 0, y: 10 }}
                             whileHover={{ scale: 1.05 }}
                             whileTap={{ scale: 0.95 }}
                             onClick={(e) => { e.stopPropagation(); setShowQuickView(true) }}
-                            className="absolute bottom-3 left-1/2 -translate-x-1/2 px-4 py-1.5 bg-white/95 backdrop-blur-sm border-2 border-coral text-coral font-semibold rounded-full shadow-lg hover:bg-coral hover:text-white transition-all duration-300 items-center gap-1.5 z-10 hidden sm:flex text-xs"
+                            className="absolute bottom-3 left-1/2 -translate-x-1/2 px-3 py-1.5 bg-white/95 backdrop-blur-sm border-2 border-coral text-coral font-semibold rounded-full shadow-lg hover:bg-coral hover:text-white transition-all duration-300 flex items-center gap-1.5 z-10 text-xs touch-manipulation"
+                            aria-label="Quick view"
                         >
                             <Eye className="w-3.5 h-3.5" />
-                            Quick View
+                            <span className="hidden sm:inline">Quick View</span>
                         </motion.button>
                     </div>
 
@@ -498,10 +504,10 @@ export function ProductCard({ product }: ProductCardProps) {
                             )}
                         </div>
 
-                        {/* Size Selector */}
+                        {/* Size Selector — enlarged touch targets for mobile */}
                         {hasVariants && (
                             <div className="mb-2">
-                                <div className="flex flex-nowrap overflow-x-auto gap-1.5 no-scrollbar pb-1">
+                                <div className="flex flex-nowrap overflow-x-auto gap-1.5 no-scrollbar pb-1 touch-manipulation">
                                     {product.variants!.map((variant) => (
                                         <button
                                             key={variant.id}
@@ -510,12 +516,13 @@ export function ProductCard({ product }: ProductCardProps) {
                                                 if (variant.stock > 0) setSelectedSize(variant.size)
                                             }}
                                             disabled={variant.stock === 0}
-                                            className={`px-2 py-0.5 text-[10px] font-medium rounded-md border transition-all flex-shrink-0
+                                            style={{ touchAction: 'manipulation' }}
+                                            className={`px-2.5 py-1.5 text-xs font-medium rounded-lg border transition-all flex-shrink-0 min-h-[32px]
                                                 ${selectedSize === variant.size
-                                                    ? 'border-orange-500 bg-orange-50 text-orange-600'
+                                                    ? 'border-orange-500 bg-orange-50 text-orange-600 font-semibold'
                                                     : variant.stock === 0
                                                         ? 'border-gray-100 bg-gray-50 text-gray-300 line-through cursor-not-allowed'
-                                                        : 'border-gray-200 text-gray-600 hover:border-orange-200'
+                                                        : 'border-gray-200 text-gray-600 hover:border-orange-200 active:border-orange-400'
                                                 }
                                             `}
                                         >
@@ -535,14 +542,14 @@ export function ProductCard({ product }: ProductCardProps) {
                             </div>
                         )}
 
-                        {/* CTA Buttons */}
+                        {/* CTA Buttons — full touch target heights */}
                         <div className="grid grid-cols-2 gap-1.5 mt-auto">
                             <motion.div whileTap={buttonTap}>
                                 <Button
                                     onClick={handleAddToCart}
                                     disabled={isAddingToCart}
                                     variant="outline"
-                                    className="w-full border-2 border-gray-900 text-gray-900 hover:bg-gray-900 hover:text-white transition-all duration-300 text-xs py-1.5 sm:py-2"
+                                    className="w-full border-2 border-gray-900 text-gray-900 hover:bg-gray-900 hover:text-white active:bg-gray-900 active:text-white transition-all duration-300 text-xs py-2 sm:py-2.5 touch-manipulation"
                                     size="sm"
                                 >
                                     {isAddingToCart ? (

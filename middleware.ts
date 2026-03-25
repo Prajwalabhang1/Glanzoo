@@ -1,72 +1,108 @@
-import NextAuth from "next-auth";
-import { authConfig } from "@/lib/auth.config";
-import { NextResponse } from "next/server";
+/**
+ * middleware.ts — Next.js Edge Middleware
+ *
+ * Fixes:
+ *  - Added /checkout/:path* to matcher (was missing — checkout sub-pages were unprotected)
+ *  - Added /order-confirmation/:path* to matcher
+ *  - Added JSON 403 response for API routes accessed by wrong role
+ *  - /api/admin/* now returns 401/403 JSON instead of silently passing through
+ *  - /api/vendor/* now returns 401/403 JSON for non-vendor callers
+ *  - Vendor status check: unapproved vendor API calls get 403
+ */
+import NextAuth from 'next-auth';
+import { authConfig } from '@/lib/auth.config';
+import { NextResponse } from 'next/server';
 
 const { auth } = NextAuth(authConfig);
 
 export default auth(async (req) => {
-    const session = req.auth;
-    const { nextUrl } = req;
-    const pathname = nextUrl.pathname;
+  const session = req.auth;
+  const { nextUrl } = req;
+  const pathname = nextUrl.pathname;
 
-    // Protected routes that require authentication
-    const protectedRoutes = ['/my-account', '/checkout', '/saved-items'];
-    const adminRoutes = ['/admin'];
-    const vendorRoutes = ['/vendor'];
+  // ── API route guards ─────────────────────────────────────────────────────────
+  const isAdminApi = pathname.startsWith('/api/admin');
+  const isVendorApi = pathname.startsWith('/api/vendor');
 
-    // Check if route is protected
-    const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route));
-    const isAdminRoute = adminRoutes.some(route => pathname.startsWith(route));
-    const isVendorRoute = vendorRoutes.some(route => pathname.startsWith(route));
-
-    // Redirect to login if accessing protected route without authentication
-    if (isProtectedRoute && !session) {
-        const loginUrl = new URL('/login', req.url);
-        loginUrl.searchParams.set('callbackUrl', pathname);
-        return NextResponse.redirect(loginUrl);
+  if (isAdminApi) {
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    if (isAdminRoute) {
-        if (!session) {
-            const loginUrl = new URL('/login', req.url);
-            loginUrl.searchParams.set('callbackUrl', pathname);
-            return NextResponse.redirect(loginUrl);
-        }
-
-        if (session.user?.role !== 'ADMIN') {
-            return NextResponse.redirect(new URL('/', req.url));
-        }
+    if (session.user?.role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+  }
 
-    // Check vendor access
-    if (isVendorRoute) {
-        if (!session) {
-            const loginUrl = new URL('/login', req.url);
-            loginUrl.searchParams.set('callbackUrl', pathname);
-            return NextResponse.redirect(loginUrl);
-        }
-
-        if (session.user?.role !== 'VENDOR') {
-            return NextResponse.redirect(new URL('/', req.url));
-        }
-
-        // Redirect unapproved vendors to pending page
-        // FIX-11: vendorStatus is properly typed in next-auth.d.ts — no need for `as any`
-        if (session.user.vendorStatus !== 'APPROVED' && !pathname.includes('/pending')) {
-            return NextResponse.redirect(new URL('/vendor/pending', req.url));
-        }
+  if (isVendorApi) {
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    if (session.user?.role !== 'VENDOR') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+    if (
+      session.user.vendorStatus !== 'APPROVED' &&
+      // Allow the pending-status check endpoint itself
+      !pathname.includes('/api/vendor/status')
+    ) {
+      return NextResponse.json(
+        { error: 'Vendor account not yet approved' },
+        { status: 403 }
+      );
+    }
+  }
 
-    return NextResponse.next();
+  // ── Page route guards ────────────────────────────────────────────────────────
+  const protectedRoutes = ['/my-account', '/checkout', '/saved-items', '/order-confirmation'];
+  const adminRoutes = ['/admin'];
+  const vendorRoutes = ['/vendor'];
+
+  const isProtectedRoute = protectedRoutes.some((r) => pathname.startsWith(r));
+  const isAdminRoute = adminRoutes.some((r) => pathname.startsWith(r));
+  const isVendorRoute = vendorRoutes.some((r) => pathname.startsWith(r));
+
+  // Unauthenticated → redirect to login with callbackUrl
+  if ((isProtectedRoute || isAdminRoute || isVendorRoute) && !session) {
+    const loginUrl = new URL('/login', req.url);
+    loginUrl.searchParams.set('callbackUrl', pathname);
+    return NextResponse.redirect(loginUrl);
+  }
+
+  // Admin page: non-ADMIN role → home
+  if (isAdminRoute && session?.user?.role !== 'ADMIN') {
+    return NextResponse.redirect(new URL('/', req.url));
+  }
+
+  // Vendor page: non-VENDOR role → home
+  if (isVendorRoute && session?.user?.role !== 'VENDOR') {
+    return NextResponse.redirect(new URL('/', req.url));
+  }
+
+  // Unapproved vendor → pending page
+  if (
+    isVendorRoute &&
+    session?.user?.vendorStatus !== 'APPROVED' &&
+    !pathname.includes('/pending')
+  ) {
+    return NextResponse.redirect(new URL('/vendor/pending', req.url));
+  }
+
+  return NextResponse.next();
 });
 
 export const config = {
-    matcher: [
-        '/my-account',
-        '/my-account/:path*',
-        '/saved-items',
-        '/admin/:path*',
-        '/vendor/:path*',
-        '/checkout',
-    ],
+  matcher: [
+    // Page routes
+    '/my-account',
+    '/my-account/:path*',
+    '/saved-items',
+    '/checkout',
+    '/checkout/:path*',
+    '/order-confirmation/:path*',
+    '/admin/:path*',
+    '/vendor/:path*',
+    // API routes that need role enforcement
+    '/api/admin/:path*',
+    '/api/vendor/:path*',
+  ],
 };

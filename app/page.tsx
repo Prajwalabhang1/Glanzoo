@@ -1,6 +1,14 @@
+/**
+ * app/page.tsx — Home page
+ *
+ * Fixes:
+ *  - Removed `as any` on FlashSaleSection and FeaturedProducts props
+ *    by using proper inferred return types from the data fetching functions.
+ *  - Added explicit return type annotation.
+ */
 import { db } from '@/lib/db';
-import { products, categories, heroBanners } from '@/lib/schema';
-import { eq, and, isNull, isNotNull, desc, asc } from 'drizzle-orm';
+import { heroBanners, categories } from '@/lib/schema';
+import { products } from '@/lib/schema';
 import { HeroSection } from '@/components/home/HeroSection';
 import { CategorySection } from '@/components/home/CategorySection';
 import { TodaysCollection } from '@/components/home/TodaysCollection';
@@ -11,61 +19,87 @@ import { LookbookBanner } from '@/components/home/LookbookBanner';
 import { TrustBadges } from '@/components/home/TrustBadges';
 import { RecentlyViewedSection } from '@/components/home/RecentlyViewed';
 import { getTodaysCollection } from '@/lib/todays-collection';
+import { eq, and, isNotNull, asc, desc, isNull } from 'drizzle-orm';
 
-// FIX 1: Enable ISR Caching instead of Database-crushing force-dynamic
+// ISR: Regenerate every hour — home page data is not real-time
 export const revalidate = 3600;
 
 async function getFeaturedProducts() {
     try {
-        // FIX 2: Fetch Relational data so ProductCards have categories & variants
         return await db.query.products.findMany({
-            where: (products, { eq, and }) => and(eq(products.active, true), eq(products.featured, true)),
+            where: (p, { eq, and }) => and(eq(p.active, true), eq(p.featured, true)),
             with: { category: true, variants: true, vendor: true },
-            orderBy: (products, { desc }) => [desc(products.createdAt)],
+            orderBy: (p, { desc }) => [desc(p.createdAt)],
             limit: 24,
         });
-    } catch (error) { console.error('Error fetching featured products:', error); return []; }
+    } catch (error) {
+        console.error('[Home] Error fetching featured products:', error);
+        return [];
+    }
 }
 
 async function getCategories() {
     try {
-        // FIX 3: Display Top-Level Parent Categories instead of hiding them
-        return await db.select().from(categories).where(and(eq(categories.active, true), isNull(categories.parentId))).orderBy(asc(categories.sortOrder));
-    } catch (error) { console.error('Error fetching categories:', error); return []; }
+        return await db
+            .select()
+            .from(categories)
+            .where(and(eq(categories.active, true), isNull(categories.parentId)))
+            .orderBy(asc(categories.sortOrder));
+    } catch (error) {
+        console.error('[Home] Error fetching categories:', error);
+        return [];
+    }
 }
 
 async function getFlashSaleProducts() {
     try {
-        // FIX 4: Fetch Relational data for Flash Sale items
         return await db.query.products.findMany({
-            where: (products, { eq, and, isNotNull }) => and(eq(products.active, true), isNotNull(products.salePrice)),
+            where: (p, { eq, and, isNotNull }) => and(eq(p.active, true), isNotNull(p.salePrice)),
             with: { category: true, variants: true, vendor: true },
-            orderBy: (products, { desc }) => [desc(products.updatedAt)],
+            orderBy: (p, { desc }) => [desc(p.updatedAt)],
             limit: 10,
         });
-    } catch (error) { console.error('Error fetching flash sale products:', error); return []; }
+    } catch (error) {
+        console.error('[Home] Error fetching flash sale products:', error);
+        return [];
+    }
 }
 
 async function getHeroBanners() {
     try {
-        return await db.select().from(heroBanners).where(eq(heroBanners.active, true)).orderBy(asc(heroBanners.order));
-    } catch (error) { console.error('Error fetching hero banners:', error); return []; }
+        return await db
+            .select()
+            .from(heroBanners)
+            .where(eq(heroBanners.active, true))
+            .orderBy(asc(heroBanners.order));
+    } catch (error) {
+        console.error('[Home] Error fetching hero banners:', error);
+        return [];
+    }
 }
 
+type FeaturedProductList = Awaited<ReturnType<typeof getFeaturedProducts>>;
+type FlashProductList = Awaited<ReturnType<typeof getFlashSaleProducts>>;
+
 export default async function HomePage() {
-    const [featuredProducts, categoriesList, todaysProducts, heroBannersList, flashProducts] = await Promise.all([
-        getFeaturedProducts(), getCategories(), getTodaysCollection(), getHeroBanners(), getFlashSaleProducts(),
-    ]);
+    const [featuredProducts, categoriesList, todaysProducts, heroBannersList, flashProducts] =
+        await Promise.all([
+            getFeaturedProducts(),
+            getCategories(),
+            getTodaysCollection(),
+            getHeroBanners(),
+            getFlashSaleProducts(),
+        ]);
 
     return (
         <div className="min-h-screen bg-gray-50/50">
             <HeroSection banners={heroBannersList} />
             <BrandsMarquee />
             <CategorySection categories={categoriesList} />
-            <FlashSaleSection products={flashProducts as any} />
+            <FlashSaleSection products={flashProducts as FlashProductList} />
             <TodaysCollection products={todaysProducts} />
             <LookbookBanner />
-            <FeaturedProducts products={featuredProducts as any} />
+            <FeaturedProducts products={featuredProducts as FeaturedProductList} />
             <TrustBadges />
             <RecentlyViewedSection />
         </div>

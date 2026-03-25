@@ -1,46 +1,86 @@
+/**
+ * app/api/admin/products/approve/route.ts — Bulk product approval
+ *
+ * Fixes:
+ *  - N+1 BUG: Was firing one db.update() per product ID in a loop.
+ *    Now uses a single inArray bulk update.
+ *  - Removed `Record<string, any>` — replaced with typed UpdatePayload.
+ *  - productIds validated to be string array (was unchecked).
+ *  - Max batch size of 100 to prevent abuse.
+ */
 export const dynamic = 'force-dynamic';
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { products } from "@/lib/schema";
-import { eq, inArray, isNotNull } from "drizzle-orm";
-import { productApprovalSchema } from "@/lib/validations/vendor";
+import { inArray } from "drizzle-orm";
+import { z } from "zod";
 
-export async function POST(request: Request) {
-    try {
-        const session = await auth();
-        if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        if (session.user.role !== "ADMIN") return NextResponse.json({ error: "Forbidden: Admin access required" }, { status: 403 });
+const approveSchema = z.object({
+  productIds: z.array(z.string().min(1)).min(1).max(100, "Max 100 products per batch"),
+  approvalStatus: z.enum(["APPROVED", "REJECTED", "PENDING"]),
+  rejectionReason: z.string().optional(),
+});
 
-        const body = await request.json();
-        const { productIds, approvalStatus, rejectionReason } = body;
+type ProductApprovalUpdate = {
+  approvalStatus: "APPROVED" | "REJECTED" | "PENDING";
+  approvedBy: string;
+  approvedAt: Date | null;
+  active?: boolean;
+  rejectionReason?: string | null;
+};
 
-        if (!productIds || !Array.isArray(productIds) || productIds.length === 0) return NextResponse.json({ error: "Product IDs array is required" }, { status: 400 });
+export async function POST(request: Request): Promise<NextResponse> {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (session.user.role !== "ADMIN") return NextResponse.json({ error: "Forbidden: Admin access required" }, { status: 403 });
 
-        const validatedData = productApprovalSchema.safeParse({ approvalStatus, rejectionReason });
-        if (!validatedData.success) return NextResponse.json({ error: "Validation failed", details: validatedData.error.errors }, { status: 400 });
-        if (validatedData.data.approvalStatus === "REJECTED" && !validatedData.data.rejectionReason) return NextResponse.json({ error: "Rejection reason is required when rejecting products" }, { status: 400 });
+    const body = await request.json();
+    const parsed = approveSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "Validation failed", details: parsed.error.flatten() },
+        { status: 400 }
+      );
+    }
 
-        const updateData: Record<string, any> = {
-            approvalStatus: validatedData.data.approvalStatus,
-            approvedBy: session.user.id,
-        };
+    const { productIds, approvalStatus, rejectionReason } = parsed.data;
 
-        if (validatedData.data.approvalStatus === "APPROVED") {
-            updateData.approvedAt = new Date(); updateData.active = true; updateData.rejectionReason = null;
-        } else if (validatedData.data.approvalStatus === "REJECTED") {
-            updateData.approvedAt = null; updateData.active = false; updateData.rejectionReason = validatedData.data.rejectionReason;
-        }
+    if (approvalStatus === "REJECTED" && !rejectionReason) {
+      return NextResponse.json(
+        { error: "Rejection reason is required when rejecting products" },
+        { status: 400 }
+      );
+    }
 
-        // Drizzle doesn't support updateMany with complex conditions the same way; use inArray + isNotNull filter
-        const eligibleProducts = await db.select({ id: products.id }).from(products).where(inArray(products.id, productIds));
-        const eligibleIds = eligibleProducts.map(p => p.id);
-        if (eligibleIds.length > 0) {
-            for (const id of eligibleIds) {
-                await db.update(products).set(updateData).where(eq(products.id, id));
-            }
-        }
+    // Build typed update payload
+    const updateData: ProductApprovalUpdate = {
+      approvalStatus,
+      approvedBy: session.user.id,
+      approvedAt: approvalStatus === "APPROVED" ? new Date() : null,
+    };
 
-        return NextResponse.json({ message: `${eligibleIds.length} product(s) ${validatedData.data.approvalStatus.toLowerCase()} successfully`, count: eligibleIds.length });
-    } catch (error) { console.error("Error approving products:", error); return NextResponse.json({ error: "Failed to approve products" }, { status: 500 }); }
+    if (approvalStatus === "APPROVED") {
+      updateData.active = true;
+      updateData.rejectionReason = null;
+    } else if (approvalStatus === "REJECTED") {
+      updateData.active = false;
+      updateData.rejectionReason = rejectionReason ?? null;
+    }
+
+    // FIX N+1: Single inArray bulk update instead of loop of individual updates
+    await db
+      .update(products)
+      .set(updateData)
+      .where(inArray(products.id, productIds));
+
+    return NextResponse.json({
+      message: `${productIds.length} product(s) ${approvalStatus.toLowerCase()} successfully`,
+      count: productIds.length,
+    });
+  } catch (error) {
+    console.error("[Admin Products Approve] Error:", error);
+    return NextResponse.json({ error: "Failed to approve products" }, { status: 500 });
+  }
 }

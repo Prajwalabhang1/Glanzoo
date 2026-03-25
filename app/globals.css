@@ -122,6 +122,83 @@
   .scrollbar-hide::-webkit-scrollbar {
     display: none;              /* Chrome/Safari/Opera */
   }
+
+  /* ── Mobile / Touch Utilities ────────────────────────── */
+
+  /**
+   * Removes 300ms tap delay on touch devices.
+   * Apply to any interactive element that doesn't scroll.
+   */
+  .touch-manipulation {
+    touch-action: manipulation;
+  }
+
+  /**
+   * Momentum scrolling on iOS for overflow-y areas.
+   */
+  .scroll-smooth-ios {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+  }
+
+  /**
+   * Horizontal scroll snap — used for carousels/image galleries.
+   */
+  .scroll-snap-x {
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+  .scroll-snap-item {
+    scroll-snap-align: start;
+  }
+
+  /**
+   * iPad/phone notch-safe padding helpers.
+   * Add pb-safe-nav to page wrappers so content isn't hidden
+   * behind the BottomNav on mobile.
+   */
+  .pb-safe-nav {
+    padding-bottom: calc(4rem + env(safe-area-inset-bottom));
+  }
+  @media (min-width: 768px) {
+    .pb-safe-nav {
+      padding-bottom: 0;
+    }
+  }
+
+  /**
+   * Loading skeleton shimmer — mobile-optimised (prefer-reduced-motion aware).
+   */
+  .skeleton {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 400% 100%;
+    animation: skeleton-loading 1.4s ease infinite;
+    border-radius: 0.5rem;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .skeleton {
+      animation: none;
+      background: #f0f0f0;
+    }
+  }
+
+  @keyframes skeleton-loading {
+    0% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+
+  /**
+   * Minimum recommended touch target size (WCAG 2.5.5).
+   * Centers content in a 44px × 44px hit area.
+   */
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
 }
 
 /* Base Styles */
@@ -190,6 +267,10 @@
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
     -webkit-font-smoothing: antialiased;
+    /* Suppress tap highlight on touch devices — use focus-visible for keyboard users */
+    -webkit-tap-highlight-color: transparent;
+    /* Prevent rubber-band scrolling from causing layout shift on iOS */
+    overscroll-behavior: none;
   }
 
   h1,

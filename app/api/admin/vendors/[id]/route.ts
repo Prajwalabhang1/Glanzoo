@@ -45,7 +45,14 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         const body = await request.json();
         const validatedData = vendorApprovalSchema.safeParse(body);
         if (!validatedData.success) return NextResponse.json({ error: "Validation failed", details: validatedData.error.errors }, { status: 400 });
-        const updateData: Record<string, any> = { status: validatedData.data.status };
+        type VendorApprovalUpdate = {
+          status: string;
+          approvalNotes?: string;
+          commissionRate?: number;
+          approvedAt?: Date | null;
+          approvedBy?: string | null;
+        };
+        const updateData: VendorApprovalUpdate = { status: validatedData.data.status };
         if (validatedData.data.approvalNotes !== undefined) updateData.approvalNotes = validatedData.data.approvalNotes;
         if (validatedData.data.commissionRate !== undefined) updateData.commissionRate = validatedData.data.commissionRate;
         if (validatedData.data.status === "APPROVED") { updateData.approvedAt = new Date(); updateData.approvedBy = session.user.id; }
