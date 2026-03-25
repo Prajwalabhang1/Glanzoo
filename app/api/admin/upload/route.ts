@@ -48,13 +48,18 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        // ── Local fallback (Docker volume mounts /app/public/uploads) ───────
+        // ── Local fallback (Hostinger Standalone / Docker) ──────────────────
         const safeName = file.name
             .replace(/[^a-zA-Z0-9.-]/g, '_')
             .replace(/_{2,}/g, '_')
             .slice(0, 80)
         const filename = `${Date.now()}-${safeName}`
-        const uploadDir = join(process.cwd(), 'public', 'uploads', folder)
+        
+        // In Next.js standalone mode, process.cwd() is .next/standalone.
+        // We must write to the actual project root's public folder so Nginx can see it.
+        const isStandalone = process.cwd().endsWith('standalone')
+        const projectRoot = isStandalone ? join(process.cwd(), '../../') : process.cwd()
+        const uploadDir = join(projectRoot, 'public', 'uploads', folder)
 
         await mkdir(uploadDir, { recursive: true })
         await writeFile(join(uploadDir, filename), buffer)
