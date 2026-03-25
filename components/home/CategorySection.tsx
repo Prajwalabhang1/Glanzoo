@@ -104,8 +104,8 @@ export function CategorySection({ categories }: CategorySectionProps) {
                     <div
                         ref={scrollContainerRef}
                         onScroll={checkScrollButtons}
-                        className="flex gap-4 md:gap-6 overflow-x-auto pb-4 px-2 scrollbar-hide scroll-smooth snap-x snap-mandatory"
-                        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                        className="flex gap-4 md:gap-6 overflow-x-auto pb-4 px-4 sm:px-6 lg:px-8 -mx-4 sm:-mx-6 lg:-mx-8 scrollbar-hide scroll-smooth snap-x snap-proximity touch-pan-x"
+                        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}
                     >
                         {categories.map((category, index) => (
                             <motion.div
@@ -134,19 +134,15 @@ export function CategorySection({ categories }: CategorySectionProps) {
                                                         loading="lazy"
                                                     />
                                                     <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                                                    {/* Icon overlay — supports both image URLs and emoji */}
-                                                    {category.icon && (
+                                                    {/* Icon overlay — only supports valid image URLs (removes letter abbreviations) */}
+                                                    {category.icon && (category.icon.startsWith('/') || category.icon.startsWith('http')) && (
                                                         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                                                            {category.icon.startsWith('/') || category.icon.startsWith('http') ? (
-                                                                // eslint-disable-next-line @next/next/no-img-element
-                                                                <img
-                                                                    src={category.icon}
-                                                                    alt={category.name}
-                                                                    className="w-full h-full object-cover rounded-full"
-                                                                />
-                                                            ) : (
-                                                                <span className="text-3xl drop-shadow-lg">{category.icon}</span>
-                                                            )}
+                                                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                            <img
+                                                                src={category.icon}
+                                                                alt={category.name}
+                                                                className="w-full h-full object-cover rounded-full"
+                                                            />
                                                         </div>
                                                     )}
                                                 </div>

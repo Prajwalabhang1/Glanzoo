@@ -72,32 +72,6 @@ export function TrustBadges() {
                     ))}
                 </div>
 
-                {/* Payment Methods & Security */}
-                <motion.div
-                    initial={{ opacity: 0 }}
-                    whileInView={{ opacity: 1 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: 0.3 }}
-                    className="flex flex-col items-center gap-6"
-                >
-                    <div className="flex items-center gap-4 flex-wrap justify-center">
-                        <span className="text-sm text-gray-500 font-medium">We Accept:</span>
-                        {paymentMethods.map((method, index) => (
-                            <div
-                                key={index}
-                                className="flex items-center gap-2 px-4 py-2 bg-gray-50 rounded-lg border border-gray-200"
-                            >
-                                <span className="text-2xl">{method.logo}</span>
-                                <span className="text-sm font-medium text-gray-700">{method.name}</span>
-                            </div>
-                        ))}
-                    </div>
-
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <Shield className="h-4 w-4 text-gold" />
-                        <span>Secured by SSL Encryption | PCI DSS Compliant</span>
-                    </div>
-                </motion.div>
             </div>
         </section>
     )
