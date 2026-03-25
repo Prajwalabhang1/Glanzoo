@@ -27,7 +27,7 @@ function createDb(): DrizzleDB {
     enableKeepAlive: true,
     keepAliveInitialDelay: 0,
   });
-  return drizzle(pool, { schema, mode: 'default' });
+  return drizzle(pool, { schema, mode: 'planetscale' });
 }
 
 export const db: DrizzleDB = globalForDb.db ?? createDb();
