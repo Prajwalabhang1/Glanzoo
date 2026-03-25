@@ -34,26 +34,22 @@ const envSchema = z.object({
     .default('development'),
 
   // ── Razorpay ───────────────────────────────────────────────────
-  RAZORPAY_KEY_ID: z.string().min(1, 'RAZORPAY_KEY_ID is required'),
-  RAZORPAY_KEY_SECRET: z.string().min(1, 'RAZORPAY_KEY_SECRET is required'),
-  NEXT_PUBLIC_RAZORPAY_KEY_ID: z
-    .string()
-    .min(1, 'NEXT_PUBLIC_RAZORPAY_KEY_ID is required'),
+  // ── Razorpay ───────────────────────────────────────────────────
+  RAZORPAY_KEY_ID: z.string().default('MISSING_RAZORPAY_KEY'),
+  RAZORPAY_KEY_SECRET: z.string().default('MISSING_RAZORPAY_SECRET'),
+  NEXT_PUBLIC_RAZORPAY_KEY_ID: z.string().default('MISSING_RAZORPAY_KEY'),
 
   // ── SMTP / Email ───────────────────────────────────────────────
-  SMTP_HOST: z.string().min(1, 'SMTP_HOST is required'),
-  SMTP_PORT: z
-    .string()
-    .regex(/^\d+$/, 'SMTP_PORT must be a number string')
-    .default('587'),
-  SMTP_USER: z.string().min(1, 'SMTP_USER is required'),
-  SMTP_PASS: z.string().min(1, 'SMTP_PASS is required'),
-  EMAIL_FROM: z.string().email('EMAIL_FROM must be a valid email'),
+  SMTP_HOST: z.string().default('smtp.gmail.com'),
+  SMTP_PORT: z.string().regex(/^\d+$/, 'SMTP_PORT must be a number string').default('587'),
+  SMTP_USER: z.string().default('missing@email.com'),
+  SMTP_PASS: z.string().default('MISSING'),
+  EMAIL_FROM: z.string().email().default('noreply@glanzoo.com'),
 
   // ── Cloudinary ─────────────────────────────────────────────────
-  CLOUDINARY_CLOUD_NAME: z.string().min(1, 'CLOUDINARY_CLOUD_NAME is required'),
-  CLOUDINARY_API_KEY: z.string().min(1, 'CLOUDINARY_API_KEY is required'),
-  CLOUDINARY_API_SECRET: z.string().min(1, 'CLOUDINARY_API_SECRET is required'),
+  CLOUDINARY_CLOUD_NAME: z.string().default('MISSING'),
+  CLOUDINARY_API_KEY: z.string().default('MISSING'),
+  CLOUDINARY_API_SECRET: z.string().default('MISSING'),
 });
 
 export type Env = z.infer<typeof envSchema>;
