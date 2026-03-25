@@ -318,21 +318,15 @@ export default function AdminCategoriesPage() {
 
     const handleCatImageUpload = async (file: File) => {
         setCatImageUploading(true)
-        setFormError(null)
         try {
             const fd = new FormData()
             fd.append('file', file)
-            fd.append('folder', 'categories')
             const res = await fetch('/api/admin/upload', { method: 'POST', body: fd })
-            const data = await res.json().catch(() => null)
-            
-            if (!data) throw new Error('Invalid response from server (Upload may be too large)')
-            if (!res.ok || !data.success) throw new Error(data.error || 'Upload failed')
-            
-            setFormData(prev => ({ ...prev, image: data.url }))
-        } catch (err: unknown) { 
-            setFormError(err instanceof Error ? err.message : 'Upload failed')
-        }
+            const data = await res.json()
+            if (data.success && data.url) {
+                setFormData(prev => ({ ...prev, image: data.url }))
+            }
+        } catch { /* silent */ }
         finally { setCatImageUploading(false) }
     }
 
@@ -747,22 +741,17 @@ export default function AdminCategoriesPage() {
                                             const f = e.target.files?.[0]
                                             if (!f) return
                                             setCatImageUploading(true)
-                                            setFormError(null)
                                             try {
                                                 const fd = new FormData()
                                                 fd.append('file', f)
                                                 fd.append('folder', 'categories')
                                                 const res = await fetch('/api/admin/upload', { method: 'POST', body: fd })
-                                                const data = await res.json().catch(() => null)
-                                                
-                                                if (!data) throw new Error('Invalid response from server (Upload may be too large)')
-                                                if (!res.ok || !data.success) throw new Error(data.error || 'Upload failed')
-                                                
-                                                // Set as icon AND as image for max compatibility
-                                                setFormData(prev => ({ ...prev, icon: data.url, image: prev.image || data.url }))
-                                            } catch (err: unknown) { 
-                                                setFormError(err instanceof Error ? err.message : 'Icon upload failed')
-                                            }
+                                                const data = await res.json()
+                                                if (data.success && data.url) {
+                                                    // Set as icon AND as image for max compatibility
+                                                    setFormData(prev => ({ ...prev, icon: data.url, image: prev.image || data.url }))
+                                                }
+                                            } catch { /* silent */ }
                                             finally { setCatImageUploading(false); e.target.value = '' }
                                         }}
                                     />
