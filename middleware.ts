@@ -25,11 +25,16 @@ export default auth(async (req) => {
   const isVendorApi = pathname.startsWith('/api/vendor');
 
   if (isAdminApi) {
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    if (session.user?.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    // Allow public navigation bar to fetch categories
+    const isPublicCategoriesFetch = pathname === '/api/admin/categories' && req.method === 'GET' && nextUrl.searchParams.get('public') === 'true';
+
+    if (!isPublicCategoriesFetch) {
+      if (!session) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+      if (session.user?.role !== 'ADMIN') {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
     }
   }
 
