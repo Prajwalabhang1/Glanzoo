@@ -50,7 +50,7 @@ function FilterCheckbox({
 }) {
     return (
         <label
-            className={`flex items-center gap-2.5 cursor-pointer group py-1.5 px-1 rounded-lg transition-colors ${checked ? 'bg-rose-50' : 'hover:bg-gray-50'} ${dimmed ? 'opacity-40' : ''}`}
+            className={`flex items-center gap-2.5 cursor-pointer group py-1.5 px-1 rounded-lg transition-colors ${checked ? 'bg-rose-50' : 'hover:bg-gray-50'}`}
         >
             {/* Custom checkbox */}
             <span
