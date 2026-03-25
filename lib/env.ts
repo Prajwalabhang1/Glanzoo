@@ -65,7 +65,19 @@ function validateEnv(): Env {
     const formatted = result.error.errors
       .map((e) => `  • [${e.path.join('.')}] ${e.message}`)
       .join('\n');
-    // Throw a descriptive error that will surface in Hostinger logs
+      
+    // Detect if we are in the Next.js build phase
+    const isBuildPhase = 
+      process.env.npm_lifecycle_event === 'build' || 
+      process.env.NEXT_PHASE === 'phase-production-build' ||
+      process.env.CI;
+
+    if (isBuildPhase) {
+      console.warn(`\n⚠️ Build Phase: Skipping strict environment validation for missing variables:\n${formatted}\n`);
+      return process.env as unknown as Env;
+    }
+
+    // Throw a descriptive error that will surface in Hostinger logs at runtime
     throw new Error(
       `\n\n🚨 Missing or invalid environment variables:\n${formatted}\n\n` +
         `Please update your .env file or Hostinger environment panel.\n`
