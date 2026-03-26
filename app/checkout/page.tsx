@@ -44,7 +44,7 @@ interface Window {
 
 export default function CheckoutPage() {
     const { items, subtotal, clearCart } = useCart()
-    const { data: session } = useSession()
+    const { data: session, status: sessionStatus } = useSession()
     const router = useRouter()
     const { success, error } = useToast()
     const [isProcessing, setIsProcessing] = useState(false)
@@ -64,6 +64,13 @@ export default function CheckoutPage() {
         // Payment
         paymentMethod: 'COD', // COD, ONLINE
     })
+
+    // ── SECURITY: redirect unauthenticated users to login ────────────────────────
+    useEffect(() => {
+        if (sessionStatus === 'unauthenticated') {
+            window.location.href = '/login?callbackUrl=/checkout'
+        }
+    }, [sessionStatus])
 
     // Sync form with session data when it loads
     useEffect(() => {
@@ -85,6 +92,15 @@ export default function CheckoutPage() {
             router.push('/cart');
         }
     }, [items, router, error]);
+
+    // Show spinner while session is loading or user is unauthenticated (before redirect fires)
+    if (sessionStatus === 'loading' || sessionStatus === 'unauthenticated') {
+        return (
+            <div className="min-h-screen flex items-center justify-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600"></div>
+            </div>
+        )
+    }
 
     if (items.length === 0) {
         return (

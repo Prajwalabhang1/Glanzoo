@@ -136,7 +136,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
+    // ── SECURITY: require authentication — guests cannot place orders ────────────
     const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
 
     // Validate request shape
