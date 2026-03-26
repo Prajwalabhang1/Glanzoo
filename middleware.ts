@@ -1,13 +1,13 @@
 /**
  * middleware.ts — Next.js Edge Middleware
  *
- * Fixes:
- *  - Added /checkout/:path* to matcher (was missing — checkout sub-pages were unprotected)
- *  - Added /order-confirmation/:path* to matcher
- *  - Added JSON 403 response for API routes accessed by wrong role
- *  - /api/admin/* now returns 401/403 JSON instead of silently passing through
- *  - /api/vendor/* now returns 401/403 JSON for non-vendor callers
- *  - Vendor status check: unapproved vendor API calls get 403
+ * Architecture:
+ *  - Page-level auth redirects are handled by the authorized() callback in
+ *    lib/auth.config.ts. This avoids using NextResponse.redirect() in this file
+ *    for page routes, which broke on Hostinger (RSC payload served instead of HTML).
+ *  - This file ONLY handles:
+ *    1. API route role enforcement (returns JSON 401/403, not page redirects)
+ *    2. Unapproved vendor → /vendor/pending redirect (edge case not in authorized())
  */
 import NextAuth from 'next-auth';
 import { authConfig } from '@/lib/auth.config';
@@ -26,7 +26,10 @@ export default auth(async (req) => {
 
   if (isAdminApi) {
     // Allow public navigation bar to fetch categories
-    const isPublicCategoriesFetch = pathname === '/api/admin/categories' && req.method === 'GET' && nextUrl.searchParams.get('public') === 'true';
+    const isPublicCategoriesFetch =
+      pathname === '/api/admin/categories' &&
+      req.method === 'GET' &&
+      nextUrl.searchParams.get('public') === 'true';
 
     if (!isPublicCategoriesFetch) {
       if (!session) {
@@ -57,37 +60,14 @@ export default auth(async (req) => {
     }
   }
 
-  // ── Page route guards ────────────────────────────────────────────────────────
-  const protectedRoutes = ['/my-account', '/checkout', '/saved-items', '/order-confirmation'];
-  const adminRoutes = ['/admin'];
-  const vendorRoutes = ['/vendor'];
-
-  const isProtectedRoute = protectedRoutes.some((r) => pathname.startsWith(r));
-  const isAdminRoute = adminRoutes.some((r) => pathname.startsWith(r));
-  const isVendorRoute = vendorRoutes.some((r) => pathname.startsWith(r));
-
-  // Unauthenticated → redirect to login with callbackUrl
-  if ((isProtectedRoute || isAdminRoute || isVendorRoute) && !session) {
-    const loginUrl = new URL('/login', req.url);
-    loginUrl.searchParams.set('callbackUrl', pathname);
-    return NextResponse.redirect(loginUrl);
-  }
-
-  // Admin page: non-ADMIN role → home
-  if (isAdminRoute && session?.user?.role !== 'ADMIN') {
-    return NextResponse.redirect(new URL('/', req.url));
-  }
-
-  // Vendor page: non-VENDOR role → home
-  if (isVendorRoute && session?.user?.role !== 'VENDOR') {
-    return NextResponse.redirect(new URL('/', req.url));
-  }
-
-  // Unapproved vendor → pending page
+  // ── Unapproved vendor → /vendor/pending ──────────────────────────────────────
+  // This edge case isn't handled by authorized() since it needs to check vendorStatus.
   if (
-    isVendorRoute &&
-    session?.user?.vendorStatus !== 'APPROVED' &&
-    !pathname.includes('/pending')
+    pathname.startsWith('/vendor') &&
+    !pathname.includes('/pending') &&
+    !pathname.startsWith('/api/vendor') &&
+    session?.user?.role === 'VENDOR' &&
+    session?.user?.vendorStatus !== 'APPROVED'
   ) {
     return NextResponse.redirect(new URL('/vendor/pending', req.url));
   }
@@ -97,7 +77,7 @@ export default auth(async (req) => {
 
 export const config = {
   matcher: [
-    // Page routes
+    // Page routes — needed for the authorized() callback to fire
     '/my-account',
     '/my-account/:path*',
     '/saved-items',
