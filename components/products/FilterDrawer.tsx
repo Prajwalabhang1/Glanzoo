@@ -204,7 +204,7 @@ export function FilterDrawer({
             {/* Floating trigger button - mobile only */}
             <button
                 onClick={() => setIsOpen(true)}
-                className="fixed bottom-[calc(env(safe-area-inset-bottom)+5rem)] right-4 z-40 flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-rose via-coral to-gold text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 md:hidden"
+                className="fixed bottom-24 right-4 z-40 flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-rose via-coral to-gold text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 md:hidden"
             >
                 <SlidersHorizontal className="w-4 h-4" />
                 <span className="font-semibold text-sm">

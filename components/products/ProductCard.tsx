@@ -88,13 +88,17 @@ export function ProductCard({ product }: ProductCardProps) {
         setIsMounted(true)
     }, [])
 
-    // Parse images - handle both JSON array and plain string
+    // Parse images - handle both JSON array and plain string, and pre-parsed arrays
     let imageUrls: string[] = []
-    try {
-        const parsed = JSON.parse(product.images)
-        imageUrls = Array.isArray(parsed) ? parsed : [parsed]
-    } catch {
-        imageUrls = [product.images]
+    if (Array.isArray(product.images)) {
+        imageUrls = product.images;
+    } else if (typeof product.images === 'string') {
+        try {
+            const parsed = JSON.parse(product.images)
+            imageUrls = Array.isArray(parsed) ? parsed : [parsed]
+        } catch {
+            imageUrls = [product.images]
+        }
     }
 
     // Filter out empty strings and invalid URLs

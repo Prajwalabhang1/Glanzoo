@@ -45,14 +45,19 @@ export function QuickViewModal({ product, isOpen, onClose }: QuickViewModalProps
     const [selectedImageIndex, setSelectedImageIndex] = useState(0)
     const [isAddingToCart, setIsAddingToCart] = useState(false)
 
-    // Parse images
+    // Parse images - handle both JSON array and plain string, and pre-parsed arrays
     let imageUrls: string[] = []
-    try {
-        const parsed = JSON.parse(product.images)
-        imageUrls = Array.isArray(parsed) ? parsed : [parsed]
-    } catch {
-        imageUrls = [product.images]
+    if (Array.isArray(product.images)) {
+        imageUrls = product.images;
+    } else if (typeof product.images === 'string') {
+        try {
+            const parsed = JSON.parse(product.images)
+            imageUrls = Array.isArray(parsed) ? parsed : [parsed]
+        } catch {
+            imageUrls = [product.images]
+        }
     }
+    
     imageUrls = imageUrls.filter(url => typeof url === 'string' && url.trim() !== '')
 
     const primaryImage = imageUrls[0] || 'https://placehold.co/400x600?text=No+Image'
