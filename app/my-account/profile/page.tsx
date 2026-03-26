@@ -20,7 +20,7 @@ export default function ProfilePage() {
 
     useEffect(() => {
         if (status === 'unauthenticated') {
-            router.push('/login?callbackUrl=/account/profile')
+            router.push('/login?callbackUrl=/my-account/profile')
         }
     }, [status, router])
 
@@ -97,20 +97,20 @@ export default function ProfilePage() {
                             </div>
 
                             <nav className="space-y-2">
-                                <Link
-                                    href="/account"
+                                <a
+                                    href="/my-account"
                                     className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-50 text-gray-700"
                                 >
                                     <Package className="w-5 h-5" />
                                     My Orders
-                                </Link>
-                                <Link
-                                    href="/account/profile"
+                                </a>
+                                <a
+                                    href="/my-account/profile"
                                     className="flex items-center gap-3 px-4 py-3 rounded-lg bg-orange-50 text-orange-700 font-medium"
                                 >
                                     <User className="w-5 h-5" />
                                     Profile
-                                </Link>
+                                </a>
                             </nav>
 
                             <div className="pt-4 border-t">

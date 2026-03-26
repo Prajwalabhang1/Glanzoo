@@ -150,7 +150,7 @@ export default function WishlistPage() {
                                     key={item.id}
                                     className="bg-white rounded-xl shadow-sm overflow-hidden hover:shadow-md transition-shadow"
                                 >
-                                    <Link href={`/products/${item.product.slug}`} className="block relative">
+                                    <a href={`/products/${item.product.slug}`} className="block relative">
                                         <div className="aspect-[3/4] relative bg-gray-100">
                                             <Image
                                                 src={item.product.images[0] || '/placeholder-product.jpg'}
@@ -164,14 +164,14 @@ export default function WishlistPage() {
                                                 </div>
                                             )}
                                         </div>
-                                    </Link>
+                                    </a>
 
                                     <div className="p-4">
-                                        <Link href={`/products/${item.product.slug}`}>
+                                        <a href={`/products/${item.product.slug}`}>
                                             <h3 className="font-semibold text-gray-900 mb-1 hover:text-orange-600 line-clamp-2">
                                                 {item.product.name}
                                             </h3>
-                                        </Link>
+                                        </a>
                                         <p className="text-sm text-gray-600 mb-3">{item.product.category.name}</p>
 
                                         <div className="flex items-center gap-2 mb-4">
