@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-import { Heart, ShoppingCart, Trash2, ArrowLeft } from 'lucide-react'
+import { Heart, ShoppingCart, X, ArrowLeft, ShoppingBag } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import toast from 'react-hot-toast'
 
@@ -67,9 +67,8 @@ export default function WishlistPage() {
             const response = await fetch(`/api/wishlist?productId=${productId}`, {
                 method: 'DELETE',
             })
-
             if (response.ok) {
-                setItems(items.filter(item => item.productId !== productId))
+                setItems(prev => prev.filter(item => item.productId !== productId))
                 toast.success('Removed from wishlist')
             } else {
                 toast.error('Failed to remove item')
@@ -83,133 +82,203 @@ export default function WishlistPage() {
     }
 
     const addToCart = (productId: string) => {
-        // Redirect to product page to select size
         const item = items.find(i => i.productId === productId)
         if (item) {
             router.push(`/products/${item.product.slug}`)
         }
     }
 
+    /* ─── Loading skeleton ───────────────────────────────── */
     if (status === 'loading' || loading) {
         return (
-            <div className="min-h-screen flex items-center justify-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600"></div>
+            <div className="min-h-screen bg-gray-50/80 py-6 md:py-10">
+                <div className="container mx-auto px-4">
+                    <div className="mb-6 flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full bg-gray-200 animate-pulse" />
+                        <div className="h-6 w-36 bg-gray-200 rounded animate-pulse" />
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-4">
+                        {[...Array(6)].map((_, i) => (
+                            <div key={i} className="bg-white rounded-2xl overflow-hidden border border-gray-100">
+                                <div className="aspect-[3/4] bg-gray-100 animate-pulse" />
+                                <div className="p-3 space-y-2">
+                                    <div className="h-3 w-14 bg-gray-100 rounded animate-pulse" />
+                                    <div className="h-4 w-full bg-gray-100 rounded animate-pulse" />
+                                    <div className="h-4 w-3/4 bg-gray-100 rounded animate-pulse" />
+                                    <div className="h-5 w-20 bg-gray-100 rounded animate-pulse mt-1" />
+                                    <div className="h-8 w-full bg-gray-100 rounded-lg animate-pulse mt-2" />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
             </div>
         )
     }
 
-    if (!session) {
-        return null
-    }
+    if (!session) return null
 
+    /* ─── Main render ────────────────────────────────────── */
     return (
-        <div className="min-h-screen bg-gray-50 py-8 md:py-12">
+        <div className="min-h-screen bg-gray-50/80 py-6 md:py-10">
             <div className="container mx-auto px-4">
-                {/* Header */}
-                <div className="mb-8">
-                    <Link href="/" className="inline-flex items-center text-gray-600 hover:text-orange-600 mb-4">
-                        <ArrowLeft className="w-4 h-4 mr-2" />
-                        Back to Shopping
+
+                {/* ── Header ─────────────────────────────── */}
+                <div className="mb-6">
+                    <Link
+                        href="/"
+                        className="inline-flex items-center text-xs text-gray-400 hover:text-gold mb-3 transition-colors group"
+                    >
+                        <ArrowLeft className="w-3.5 h-3.5 mr-1 group-hover:-translate-x-0.5 transition-transform" />
+                        Continue Shopping
                     </Link>
-                    <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center">
-                            <Heart className="w-6 h-6 text-white fill-white" />
-                        </div>
-                        <div>
-                            <h1 className="text-3xl md:text-4xl font-bold">My Wishlist</h1>
-                            <p className="text-gray-600">
-                                {items.length} {items.length === 1 ? 'item' : 'items'}
-                            </p>
+
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-coral to-rose flex items-center justify-center shadow-sm">
+                                <Heart className="w-4 h-4 text-white fill-white" />
+                            </div>
+                            <div>
+                                <h1 className="text-xl md:text-2xl font-bold text-luxury-black leading-tight">
+                                    My Wishlist
+                                    <span className="text-sm font-normal text-gray-400 ml-2">
+                                        ({items.length})
+                                    </span>
+                                </h1>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                {/* Wishlist Items */}
+                {/* ── Empty state ─────────────────────────── */}
                 {items.length === 0 ? (
-                    <div className="bg-white rounded-xl shadow-sm p-12 text-center">
-                        <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                            <Heart className="w-12 h-12 text-gray-400" />
+                    <div className="bg-white rounded-2xl border border-gray-100 p-10 md:p-16 text-center max-w-lg mx-auto">
+                        <div className="w-20 h-20 rounded-full bg-gray-50 flex items-center justify-center mx-auto mb-5">
+                            <Heart className="w-9 h-9 text-gray-300" />
                         </div>
-                        <h2 className="text-2xl font-bold mb-2">Your wishlist is empty</h2>
-                        <p className="text-gray-600 mb-6">Save items you love for later!</p>
+                        <h2 className="text-lg md:text-xl font-bold text-luxury-black mb-1.5">
+                            Nothing saved yet
+                        </h2>
+                        <p className="text-sm text-gray-400 mb-6 max-w-xs mx-auto">
+                            Tap the ❤️ on any product you love — it&apos;ll show up here.
+                        </p>
                         <Link href="/products">
-                            <Button className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600">
-                                Start Shopping
+                            <Button className="bg-gradient-to-r from-coral to-rose hover:from-coral-dark hover:to-rose-dark text-white rounded-full px-6 shadow-sm">
+                                <ShoppingBag className="w-4 h-4 mr-2" />
+                                Browse Products
                             </Button>
                         </Link>
                     </div>
                 ) : (
-                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    /* ── Product grid ── same layout as /products page */
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-4">
                         {items.map((item) => {
-                            const discountPercent = item.product.salePrice
-                                ? Math.round(((item.product.price - item.product.salePrice) / item.product.price) * 100)
+                            const displayPrice = item.product.salePrice || item.product.price
+                            const hasDiscount = item.product.salePrice && item.product.salePrice < item.product.price
+                            const discountPercent = hasDiscount
+                                ? Math.round(((item.product.price - (item.product.salePrice || 0)) / item.product.price) * 100)
                                 : 0
+                            const isRemoving = removingId === item.productId
+                            const outOfStock = item.product.stock === 0
 
                             return (
                                 <div
                                     key={item.id}
-                                    className="bg-white rounded-xl shadow-sm overflow-hidden hover:shadow-md transition-shadow"
+                                    className={`bg-white rounded-2xl overflow-hidden border border-gray-100 flex flex-col transition-all duration-300 group
+                                        ${isRemoving ? 'opacity-40 scale-[0.97] pointer-events-none' : 'hover:shadow-md hover:border-gold/20'}
+                                    `}
                                 >
-                                    <a href={`/products/${item.product.slug}`} className="block relative">
-                                        <div className="aspect-[3/4] relative bg-gray-100">
+                                    {/* ── Image ──────────────────────── */}
+                                    <a
+                                        href={`/products/${item.product.slug}`}
+                                        className="block relative overflow-hidden"
+                                    >
+                                        <div className="aspect-[3/4] relative bg-gray-50">
                                             <Image
                                                 src={item.product.images[0] || '/placeholder-product.jpg'}
                                                 alt={item.product.name}
                                                 fill
-                                                className="object-cover"
+                                                className="object-cover group-hover:scale-105 transition-transform duration-500"
+                                                sizes="(max-width:640px) 50vw,(max-width:1024px) 33vw,20vw"
                                             />
+
+                                            {/* Discount badge */}
                                             {discountPercent > 0 && (
-                                                <div className="absolute top-3 right-3 bg-red-500 text-white px-2 py-1 rounded-full text-xs font-bold">
+                                                <span className="absolute top-2 left-2 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">
                                                     {discountPercent}% OFF
+                                                </span>
+                                            )}
+
+                                            {/* Out of stock overlay */}
+                                            {outOfStock && (
+                                                <div className="absolute inset-0 bg-white/60 flex items-center justify-center">
+                                                    <span className="text-[11px] font-semibold text-gray-600 bg-white border border-gray-200 rounded-full px-3 py-1">
+                                                        Out of Stock
+                                                    </span>
                                                 </div>
                                             )}
                                         </div>
+
+                                        {/* Remove btn — always visible on mobile, hover on desktop */}
+                                        <button
+                                            onClick={(e) => {
+                                                e.preventDefault()
+                                                e.stopPropagation()
+                                                removeFromWishlist(item.productId)
+                                            }}
+                                            disabled={isRemoving}
+                                            className="absolute top-2 right-2 w-7 h-7 rounded-full bg-white/90 backdrop-blur-sm shadow-sm flex items-center justify-center
+                                                       sm:opacity-0 sm:group-hover:opacity-100 transition-opacity
+                                                       hover:bg-red-50 active:scale-90 z-10"
+                                            aria-label="Remove from wishlist"
+                                        >
+                                            <X className="w-3.5 h-3.5 text-gray-500 hover:text-red-500 transition-colors" />
+                                        </button>
                                     </a>
 
-                                    <div className="p-4">
-                                        <a href={`/products/${item.product.slug}`}>
-                                            <h3 className="font-semibold text-gray-900 mb-1 hover:text-orange-600 line-clamp-2">
+                                    {/* ── Info ───────────────────────── */}
+                                    <div className="p-2.5 sm:p-3 flex flex-col flex-1">
+                                        {/* Category */}
+                                        {item.product.category?.name && (
+                                            <p className="text-[10px] text-gray-400 uppercase tracking-wider font-medium mb-0.5 truncate">
+                                                {item.product.category.name}
+                                            </p>
+                                        )}
+
+                                        {/* Title */}
+                                        <a href={`/products/${item.product.slug}`} className="flex-1">
+                                            <h3 className="text-xs sm:text-sm font-semibold text-gray-900 line-clamp-2 mb-1.5 hover:text-coral transition-colors leading-snug">
                                                 {item.product.name}
                                             </h3>
                                         </a>
-                                        {item.product.category?.name && (
-                                            <p className="text-sm text-gray-600 mb-3">{item.product.category.name}</p>
-                                        )}
 
-                                        <div className="flex items-center gap-2 mb-4">
-                                            <span className="text-xl font-bold text-gray-900">
-                                                ₹{(item.product.salePrice || item.product.price).toLocaleString()}
+                                        {/* Price row */}
+                                        <div className="flex items-baseline gap-1.5 mb-2">
+                                            <span className="text-sm sm:text-base font-bold text-luxury-black">
+                                                ₹{displayPrice.toLocaleString('en-IN')}
                                             </span>
-                                            {item.product.salePrice && (
-                                                <span className="text-sm text-gray-500 line-through">
-                                                    ₹{item.product.price.toLocaleString()}
+                                            {hasDiscount && (
+                                                <span className="text-[10px] sm:text-xs text-gray-400 line-through">
+                                                    ₹{item.product.price.toLocaleString('en-IN')}
                                                 </span>
                                             )}
                                         </div>
 
-                                        <div className="flex gap-2">
-                                            <Button
-                                                onClick={() => addToCart(item.productId)}
-                                                className="flex-1 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600"
-                                                size="sm"
-                                            >
-                                                <ShoppingCart className="w-4 h-4 mr-2" />
-                                                Add to Cart
-                                            </Button>
-                                            <Button
-                                                onClick={() => removeFromWishlist(item.productId)}
-                                                variant="outline"
-                                                size="sm"
-                                                className="text-red-600 hover:bg-red-50"
-                                                disabled={removingId === item.productId}
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </Button>
-                                        </div>
-
-                                        {item.product.stock === 0 && (
-                                            <p className="text-sm text-red-600 mt-2">Out of Stock</p>
-                                        )}
+                                        {/* CTA */}
+                                        <Button
+                                            onClick={() => addToCart(item.productId)}
+                                            disabled={outOfStock}
+                                            size="sm"
+                                            className="w-full mt-auto border-2 border-gray-900 bg-transparent text-gray-900
+                                                       hover:bg-gray-900 hover:text-white
+                                                       active:bg-gray-900 active:text-white
+                                                       disabled:border-gray-200 disabled:text-gray-300 disabled:bg-transparent
+                                                       text-[11px] sm:text-xs py-1.5 h-8 sm:h-9 rounded-lg transition-all"
+                                            variant="outline"
+                                        >
+                                            <ShoppingCart className="w-3 h-3 sm:w-3.5 sm:h-3.5 mr-1.5 flex-shrink-0" />
+                                            {outOfStock ? 'Sold Out' : 'Move to Bag'}
+                                        </Button>
                                     </div>
                                 </div>
                             )
