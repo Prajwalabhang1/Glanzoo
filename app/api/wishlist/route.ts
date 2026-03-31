@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { wishlistItems, products, productVariants } from '@/lib/schema';
+import { wishlistItems, products, productVariants, categories } from '@/lib/schema';
 import { eq, and, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 
@@ -36,9 +36,10 @@ export async function GET(): Promise<NextResponse> {
     }
 
     const rows = await db
-      .select({ wishlistItem: wishlistItems, product: products })
+      .select({ wishlistItem: wishlistItems, product: products, category: categories })
       .from(wishlistItems)
       .innerJoin(products, eq(wishlistItems.productId, products.id))
+      .leftJoin(categories, eq(products.categoryId, categories.id))
       .where(eq(wishlistItems.userId, session.user.id));
 
     if (rows.length === 0) {
@@ -57,6 +58,7 @@ export async function GET(): Promise<NextResponse> {
       product: {
         ...row.product,
         images: parseImages(row.product.images),
+        category: row.category ? { name: row.category.name, slug: row.category.slug } : null,
         variants: allVariants.filter((v) => v.productId === row.product.id),
       },
     }));

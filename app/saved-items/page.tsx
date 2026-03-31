@@ -22,7 +22,7 @@ interface WishlistItem {
         images: string[]
         category: {
             name: string
-        }
+        } | null
         stock: number
     }
 }
@@ -172,7 +172,9 @@ export default function WishlistPage() {
                                                 {item.product.name}
                                             </h3>
                                         </a>
-                                        <p className="text-sm text-gray-600 mb-3">{item.product.category.name}</p>
+                                        {item.product.category?.name && (
+                                            <p className="text-sm text-gray-600 mb-3">{item.product.category.name}</p>
+                                        )}
 
                                         <div className="flex items-center gap-2 mb-4">
                                             <span className="text-xl font-bold text-gray-900">
